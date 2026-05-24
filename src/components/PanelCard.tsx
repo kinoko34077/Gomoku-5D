@@ -5,18 +5,27 @@ interface PanelCardProps {
   title: string;
   subtitle?: string;
   defaultCollapsed?: boolean;
+  className?: string;
+  contentClassName?: string;
   children: React.ReactNode;
 }
 
-export function PanelCard({ title, subtitle, defaultCollapsed = false, children }: PanelCardProps) {
+export function PanelCard({
+  title,
+  subtitle,
+  defaultCollapsed = false,
+  className = '',
+  contentClassName = '',
+  children,
+}: PanelCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
-    <section className="pointer-events-auto rounded-2xl border border-slate-700/85 bg-slate-950/76 shadow-2xl backdrop-blur-md">
+    <section className={`pointer-events-auto rounded-2xl border border-slate-700/85 bg-slate-950/76 shadow-2xl backdrop-blur-md ${className}`}>
       <button
         type="button"
         onClick={() => setCollapsed(prev => !prev)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
       >
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
@@ -29,7 +38,7 @@ export function PanelCard({ title, subtitle, defaultCollapsed = false, children 
         </div>
       </button>
 
-      {!collapsed ? <div className="border-t border-slate-800/90 px-4 py-4">{children}</div> : null}
+      {!collapsed ? <div className={`border-t border-slate-800/90 px-3 py-3 ${contentClassName}`}>{children}</div> : null}
     </section>
   );
 }

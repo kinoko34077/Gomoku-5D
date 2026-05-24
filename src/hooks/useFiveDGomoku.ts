@@ -1,44 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { computeBestMove } from '../ai';
-import { checkWin, createEmptyBoard, detectThreats, makeMove, type Threat } from '../gameLogic';
+import { checkWin, makeMove, type Threat } from '../gameLogic';
 import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
-
-interface HistoryEntry {
-  board: Board;
-  activePlayer: Player;
-  cursor: Coordinate;
-  winInfo: WinInfo | null;
-}
+import {
+  clampIndex,
+  createHistoryEntry,
+  createInitialGameSnapshot,
+  getCenteredCursor,
+  getRedoTargetIndex,
+  getSliceIndexForAxis,
+  getUndoTargetIndex,
+  type GameStateRef,
+  type HistoryEntry,
+} from './fiveDGomokuState';
+import { useFrameLagMonitor, useThreatDetector } from './useBoardPerformance';
 
 export interface PerformanceState {
   threatCalcMs: number;
   worstFrameMs: number;
   isLagging: boolean;
-}
-
-interface GameStateRef {
-  board: Board;
-  settings: GameSettings;
-  activePlayer: Player;
-  cursor: Coordinate;
-  winInfo: WinInfo | null;
-  sliceAxis: 'X' | 'Y' | 'Z' | 'none';
-  sliceIndex: number;
-  gameMode: GameMode;
-  isAiThinking: boolean;
-  history: HistoryEntry[];
-  historyIndex: number;
-}
-
-function getSliceIndexForAxis(axis: 'X' | 'Y' | 'Z' | 'none', [x, y, z]: Coordinate): number | null {
-  if (axis === 'X') return x;
-  if (axis === 'Y') return y;
-  if (axis === 'Z') return z;
-  return null;
-}
-
-function clampIndex(value: number, size: number): number {
-  return Math.max(0, Math.min(size - 1, value));
 }
 
 export function useFiveDGomoku() {
@@ -50,12 +30,9 @@ export function useFiveDGomoku() {
   });
   const [gameMode, setGameMode] = useState<GameMode>('local');
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [board, setBoard] = useState<Board>(() => createEmptyBoard(settings.boardSize));
+  const [board, setBoard] = useState<Board>(() => createInitialGameSnapshot(settings.boardSize).board);
   const [activePlayer, setActivePlayer] = useState<Player>('white');
-  const [cursor, setCursor] = useState<Coordinate>(() => {
-    const half = Math.floor(settings.boardSize / 2);
-    return [half, half, half];
-  });
+  const [cursor, setCursor] = useState<Coordinate>(() => getCenteredCursor(settings.boardSize));
   const [winInfo, setWinInfo] = useState<WinInfo | null>(null);
   const [threats, setThreats] = useState<Threat[]>([]);
   const [performanceState, setPerformanceState] = useState<PerformanceState>({
@@ -68,14 +45,7 @@ export function useFiveDGomoku() {
   const [showGridAssist, setShowGridAssist] = useState(true);
   const [threatDetectionEnabled, setThreatDetectionEnabled] = useState(true);
   const [threatDisplayEnabled, setThreatDisplayEnabled] = useState(true);
-  const [history, setHistory] = useState<HistoryEntry[]>(() => [
-    {
-      board: createEmptyBoard(settings.boardSize),
-      activePlayer: 'white',
-      cursor: [Math.floor(settings.boardSize / 2), Math.floor(settings.boardSize / 2), Math.floor(settings.boardSize / 2)],
-      winInfo: null,
-    },
-  ]);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => createInitialGameSnapshot(settings.boardSize).history);
   const [historyIndex, setHistoryIndex] = useState(0);
 
   const stateRef = useRef<GameStateRef>({
@@ -122,26 +92,19 @@ export function useFiveDGomoku() {
   }, []);
 
   const resetGameState = useCallback((size: number) => {
-    const freshBoard = createEmptyBoard(size);
-    const half = Math.floor(size / 2);
-    const initialCursor: Coordinate = [half, half, half];
+    const initialState = createInitialGameSnapshot(size);
+    const freshBoard = initialState.board;
+    const initialCursor = initialState.cursor;
 
     setBoard(freshBoard);
     setActivePlayer('white');
     setCursor(initialCursor);
-    setSliceIndex(half);
+    setSliceIndex(initialState.sliceIndex);
     setSliceAxis('Z');
     setWinInfo(null);
     setThreats([]);
     setIsAiThinking(false);
-
-    const initialHistory: HistoryEntry = {
-      board: freshBoard,
-      activePlayer: 'white',
-      cursor: initialCursor,
-      winInfo: null,
-    };
-    setHistory([initialHistory]);
+    setHistory(initialState.history);
     setHistoryIndex(0);
   }, []);
 
@@ -149,61 +112,17 @@ export function useFiveDGomoku() {
     resetGameState(settings.boardSize);
   }, [settings.boardSize, resetGameState]);
 
-  useEffect(() => {
-    if (winInfo || !threatDetectionEnabled) {
-      setThreats([]);
-      setPerformanceState(prev => ({ ...prev, threatCalcMs: 0 }));
-      return;
-    }
+  useThreatDetector({
+    board,
+    settings,
+    activePlayer,
+    winInfo,
+    threatDetectionEnabled,
+    setThreats,
+    setPerformanceState,
+  });
 
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      const start = performance.now();
-      const detected = detectThreats(board, settings);
-      const elapsed = performance.now() - start;
-      if (cancelled) return;
-      setThreats(detected);
-      setPerformanceState(prev => ({
-        threatCalcMs: elapsed,
-        worstFrameMs: prev.worstFrameMs,
-        isLagging: prev.worstFrameMs >= 120 || elapsed >= 80,
-      }));
-    }, 0);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [board, settings, activePlayer, winInfo, threatDetectionEnabled]);
-
-  useEffect(() => {
-    let frameId = 0;
-    let previousTime = performance.now();
-    let worstFrameMs = 0;
-
-    const monitor = (now: number) => {
-      const delta = now - previousTime;
-      previousTime = now;
-      worstFrameMs = Math.max(worstFrameMs, delta);
-      frameId = window.requestAnimationFrame(monitor);
-    };
-
-    frameId = window.requestAnimationFrame(monitor);
-
-    const reportTimer = window.setInterval(() => {
-      setPerformanceState(prev => ({
-        threatCalcMs: prev.threatCalcMs,
-        worstFrameMs,
-        isLagging: prev.threatCalcMs >= 80 || worstFrameMs >= 120,
-      }));
-      worstFrameMs = 0;
-    }, 1000);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.clearInterval(reportTimer);
-    };
-  }, []);
+  useFrameLagMonitor(setPerformanceState);
 
   const executeMove = useCallback((x: number, y: number, z: number, options?: { bypassThinkingGuard?: boolean }) => {
     const { board: currentBoard, activePlayer: player, winInfo: currentWin, isAiThinking: thinking, history: currentHistory, historyIndex: currentHistoryIndex } = stateRef.current;
@@ -220,12 +139,7 @@ export function useFiveDGomoku() {
       setActivePlayer(nextPlayer);
     }
 
-    const newEntry: HistoryEntry = {
-      board: nextBoard,
-      activePlayer: nextPlayer,
-      cursor: [x, y, z],
-      winInfo: nextWin,
-    };
+    const newEntry = createHistoryEntry(nextBoard, nextPlayer, [x, y, z], nextWin);
 
     const newHistory = currentHistory.slice(0, currentHistoryIndex + 1).concat(newEntry);
     setHistory(newHistory);
@@ -259,10 +173,7 @@ export function useFiveDGomoku() {
     const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode } = stateRef.current;
     if (currentHistoryIndex === 0) return;
 
-    let targetIndex = currentHistoryIndex - 1;
-    if (currentMode !== 'local') {
-      targetIndex = currentHistoryIndex >= 2 ? currentHistoryIndex - 2 : 0;
-    }
+    const targetIndex = getUndoTargetIndex(currentHistoryIndex, currentMode);
 
     const state = currentHistory[targetIndex];
     setBoard(state.board);
@@ -276,10 +187,7 @@ export function useFiveDGomoku() {
     const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode } = stateRef.current;
     if (currentHistoryIndex >= currentHistory.length - 1) return;
 
-    let targetIndex = currentHistoryIndex + 1;
-    if (currentMode !== 'local' && currentHistoryIndex + 2 < currentHistory.length) {
-      targetIndex = currentHistoryIndex + 2;
-    }
+    const targetIndex = getRedoTargetIndex(currentHistoryIndex, currentHistory.length, currentMode);
 
     const state = currentHistory[targetIndex];
     setBoard(state.board);

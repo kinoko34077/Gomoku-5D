@@ -9,11 +9,11 @@ import { defaultVisualTuning, type VisualTuning } from './visualTuning';
 
 function AiThinkingBanner() {
   return (
-    <div className="absolute left-1/2 top-8 z-50 flex -translate-x-1/2 items-center space-x-3 rounded-full border border-purple-500/30 bg-slate-900/90 px-5 py-2.5 shadow-xl backdrop-blur-md">
+    <div className="absolute left-1/2 top-6 z-50 flex -translate-x-1/2 items-center space-x-3 rounded-full border border-purple-500/30 bg-slate-900/92 px-4 py-2 shadow-xl backdrop-blur-md">
       <div className="flex space-x-1">
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '0ms' }} />
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '150ms' }} />
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '300ms' }} />
+        <div className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '0ms' }} />
+        <div className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '150ms' }} />
+        <div className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '300ms' }} />
       </div>
       <span className="font-sans text-xs font-semibold tracking-wide text-purple-300">AI が思考中...</span>
     </div>
@@ -28,7 +28,7 @@ function PerformanceWarning({
   worstFrameMs: number;
 }) {
   return (
-    <div className="absolute bottom-4 left-4 z-40 rounded-2xl border border-red-500/30 bg-red-950/80 px-4 py-3 text-xs text-red-100 shadow-xl backdrop-blur-md">
+    <div className="absolute bottom-4 left-4 z-40 rounded-2xl border border-red-500/30 bg-red-950/82 px-3 py-2 text-xs text-red-100 shadow-xl backdrop-blur-md">
       <div className="font-semibold">性能警告</div>
       <div>警戒計算: {threatCalcMs.toFixed(1)} ms</div>
       <div>最大フレーム: {worstFrameMs.toFixed(1)} ms</div>
@@ -39,6 +39,7 @@ function PerformanceWarning({
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [visualTuning, setVisualTuning] = useState<VisualTuning>(defaultVisualTuning);
+  const [showHistoryControls, setShowHistoryControls] = useState(true);
   const { debugMode, setDebugMode } = useDebugModeToggle();
   const {
     settings,
@@ -124,6 +125,8 @@ export default function App() {
           setThreatDisplayEnabled={setThreatDisplayEnabled}
           debugMode={debugMode}
           setDebugMode={setDebugMode}
+          showHistoryControls={showHistoryControls}
+          setShowHistoryControls={setShowHistoryControls}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onReset={handleReset}
