@@ -5,12 +5,14 @@ import type { Board, Coordinate, WinInfo, GameSettings } from '../types';
 import type { Threat } from '../gameLogic';
 import type { VisualTuning } from '../visualTuning';
 import {
+  buildGridPointSets,
   createGridLines,
   createSliceBoardPlane,
   createStoneMesh,
   disposeObject3D,
   get3DPosition,
   getHoveredCoord,
+  isCoordInSlice,
   multiplyObjectOpacity,
 } from './gameBoardHelpers';
 
@@ -279,67 +281,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       const boardSize = propsRef.current.settings.boardSize;
 
-      const points: number[] = [];
-      const slicePoints: number[] = [];
-
-      // Helper to check if a connection is within the current slice
-      const isConnectionInSlice = (
-        x1: number, y1: number, z1: number,
-        x2: number, y2: number, z2: number
-      ) => {
-        const axis = propsRef.current.sliceAxis;
-        const idx = propsRef.current.sliceIndex;
-        if (axis === 'none') return false;
-        if (axis === 'X') return x1 === idx && x2 === idx;
-        if (axis === 'Y') return y1 === idx && y2 === idx;
-        if (axis === 'Z') return z1 === idx && z2 === idx;
-        return false;
-      };
-
-      // Generate lines along X
-      for (let y = 0; y < boardSize; y++) {
-        for (let z = 0; z < boardSize; z++) {
-          for (let x = 0; x < boardSize - 1; x++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x + 1, y, z, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x + 1, y, z)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
-
-      // Generate lines along Y
-      for (let x = 0; x < boardSize; x++) {
-        for (let z = 0; z < boardSize; z++) {
-          for (let y = 0; y < boardSize - 1; y++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x, y + 1, z, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x, y + 1, z)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
-
-      // Generate lines along Z
-      for (let x = 0; x < boardSize; x++) {
-        for (let y = 0; y < boardSize; y++) {
-          for (let z = 0; z < boardSize - 1; z++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x, y, z + 1, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x, y, z + 1)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
+      const { outerPoints: points, slicePoints } = buildGridPointSets(
+        boardSize,
+        cellSpacing,
+        propsRef.current.sliceAxis,
+        propsRef.current.sliceIndex,
+      );
 
       if (propsRef.current.showGridAssist && points.length > 0) {
         const gridLines = createGridLines(
@@ -382,12 +329,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             const pos = get3DPosition(x, y, z, boardSize, cellSpacing);
 
             // Determine if this cell is inside the active slice
-            let inSlice = true;
-            const axis = propsRef.current.sliceAxis;
-            const idx = propsRef.current.sliceIndex;
-            if (axis === 'X' && x !== idx) inSlice = false;
-            if (axis === 'Y' && y !== idx) inSlice = false;
-            if (axis === 'Z' && z !== idx) inSlice = false;
+            const inSlice = isCoordInSlice([x, y, z], propsRef.current.sliceAxis, propsRef.current.sliceIndex);
 
             const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
             const emptyOpacity = (inSlice ? 0.32 : propsRef.current.visualTuning.offSliceEmptyOpacity) * visibilityFade;
@@ -914,62 +856,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       clearBoardVisuals(scene);
 
       // Draw Grid Lines
-      const points: number[] = [];
-      const slicePoints: number[] = [];
-
-      const isConnectionInSlice = (
-        x1: number, y1: number, z1: number,
-        x2: number, y2: number, z2: number
-      ) => {
-        if (sliceAxis === 'none') return false;
-        if (sliceAxis === 'X') return x1 === sliceIndex && x2 === sliceIndex;
-        if (sliceAxis === 'Y') return y1 === sliceIndex && y2 === sliceIndex;
-        if (sliceAxis === 'Z') return z1 === sliceIndex && z2 === sliceIndex;
-        return false;
-      };
-
-      // Generate grid coordinate lines
-      for (let y = 0; y < boardSize; y++) {
-        for (let z = 0; z < boardSize; z++) {
-          for (let x = 0; x < boardSize - 1; x++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x + 1, y, z, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x + 1, y, z)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
-
-      for (let x = 0; x < boardSize; x++) {
-        for (let z = 0; z < boardSize; z++) {
-          for (let y = 0; y < boardSize - 1; y++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x, y + 1, z, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x, y + 1, z)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
-
-      for (let x = 0; x < boardSize; x++) {
-        for (let y = 0; y < boardSize; y++) {
-          for (let z = 0; z < boardSize - 1; z++) {
-            const p1 = get3DPosition(x, y, z, boardSize, cellSpacing);
-            const p2 = get3DPosition(x, y, z + 1, boardSize, cellSpacing);
-            if (isConnectionInSlice(x, y, z, x, y, z + 1)) {
-              slicePoints.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            } else {
-              points.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-            }
-          }
-        }
-      }
+      const { outerPoints: points, slicePoints } = buildGridPointSets(
+        boardSize,
+        cellSpacing,
+        sliceAxis,
+        sliceIndex,
+      );
 
       if (showGridAssist && points.length > 0) {
         const gridLines = createGridLines(
@@ -1011,10 +903,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             const pos = get3DPosition(x, y, z, boardSize, cellSpacing);
 
             // Determine if in active slice
-            let inSlice = true;
-            if (sliceAxis === 'X' && x !== sliceIndex) inSlice = false;
-            if (sliceAxis === 'Y' && y !== sliceIndex) inSlice = false;
-            if (sliceAxis === 'Z' && z !== sliceIndex) inSlice = false;
+            const inSlice = isCoordInSlice([x, y, z], sliceAxis, sliceIndex);
 
             const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
             const emptyOpacity = (inSlice ? 0.32 : visualTuning.offSliceEmptyOpacity) * visibilityFade;

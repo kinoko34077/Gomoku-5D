@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Cpu,
@@ -49,6 +49,110 @@ interface UIOverlayProps {
   onCellClick: (x: number, y: number, z: number) => void;
 }
 
+const controlRows = [
+  ['通常ドラッグ', '回転'],
+  ['Shift + ホバー / クリック', 'X 軸固定'],
+  ['Ctrl + ホバー / クリック', 'Z 軸固定'],
+  ['Shift + Ctrl', 'XZ 軸固定'],
+  ['Alt + ドラッグ', '上下で Y、左右で Z 断面変更'],
+  ['ホイール', 'ズーム'],
+  ['Shift / Alt / Ctrl + ホイール', 'X / Y / Z の指定位置変更'],
+  ['G', 'グリッド補助切替'],
+] as const;
+
+const settingToggles = [
+  { key: 'grid', label: 'グリッド補助を表示' },
+  { key: 'threatDetect', label: '警戒判定を行う' },
+  { key: 'threatDisplay', label: '警戒表示を見せる' },
+  { key: 'debug', label: 'デバッグモード' },
+] as const;
+
+function PhaseGuide({
+  visualTuning,
+}: {
+  visualTuning: VisualTuning;
+}) {
+  return (
+    <div className="space-y-1.5 font-mono text-[10px]">
+      {Array.from({ length: 10 }).map((_, phase) => (
+        <div key={phase} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-2.5 py-2">
+          <div className="w-6 text-slate-400">{phase}</div>
+          <div className="flex flex-1 items-center gap-2">
+            <div
+              className="h-4 flex-1 rounded"
+              style={{
+                backgroundColor: getPhaseLegendStyle(phase, 'white', visualTuning).swatch,
+                border: `1px solid ${getPhaseLegendStyle(phase, 'white', visualTuning).border}`,
+              }}
+            />
+            <span className="w-3 text-slate-500">白</span>
+            <div
+              className="h-4 flex-1 rounded"
+              style={{
+                backgroundColor: getPhaseLegendStyle(phase, 'black', visualTuning).swatch,
+                border: `1px solid ${getPhaseLegendStyle(phase, 'black', visualTuning).border}`,
+              }}
+            />
+            <span className="w-3 text-slate-500">黒</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WinOverlay({
+  winInfo,
+  visible,
+  onClose,
+  onReset,
+}: {
+  winInfo: WinInfo;
+  visible: boolean;
+  onClose: () => void;
+  onReset: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 backdrop-blur-sm">
+      <div className="w-full max-w-md space-y-5 rounded-3xl border border-slate-700 bg-slate-950/92 p-8 text-center shadow-2xl">
+        <div className="flex items-start justify-between">
+          <div />
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            title="閉じる"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-3xl font-bold text-slate-950">
+          勝
+        </div>
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-wide text-yellow-300">
+            {winInfo.winner === 'white' ? '白の勝ち' : '黒の勝ち'}
+          </h2>
+          <div className="mt-2 text-xs uppercase tracking-[0.25em] text-slate-500">
+            {winInfo.type === 'streak' ? '同位置5コンボ' : 'XYZ5連 + 位相条件'}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm leading-relaxed text-slate-200">
+          {winInfo.description}
+        </div>
+        <div className="text-[11px] text-slate-500">数秒後に自動で閉じます。閉じても勝敗は維持され、追加の着手はできません。</div>
+        <button
+          onClick={onReset}
+          className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 py-3 font-extrabold text-slate-950 transition-transform active:scale-[0.98]"
+        >
+          もう一度遊ぶ
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const UIOverlay: React.FC<UIOverlayProps> = ({
   board,
   settings,
@@ -94,12 +198,14 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
     }
 
     setIsWinOverlayVisible(true);
-    const timer = window.setTimeout(() => {
-      setIsWinOverlayVisible(false);
-    }, 4500);
-
+    const timer = window.setTimeout(() => setIsWinOverlayVisible(false), 4500);
     return () => window.clearTimeout(timer);
   }, [winInfo]);
+
+  const currentPhaseStyle = useMemo(
+    () => getPhaseLegendStyle(currentCell?.phase ?? 0, currentCell?.lastPlayer ?? 'white', visualTuning),
+    [currentCell?.lastPlayer, currentCell?.phase, visualTuning],
+  );
 
   const focusOnCell = (coord: Coordinate, axis: 'X' | 'Y' | 'Z') => {
     setSliceAxis(axis);
@@ -206,22 +312,25 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                 </button>
               </div>
               <div className="space-y-3">
-                <label className="flex items-center justify-between gap-3">
-                  <span>グリッド補助を表示</span>
-                  <input type="checkbox" checked={showGridAssist} onChange={() => setShowGridAssist(prev => !prev)} />
-                </label>
-                <label className="flex items-center justify-between gap-3">
-                  <span>警戒判定を行う</span>
-                  <input type="checkbox" checked={threatDetectionEnabled} onChange={() => setThreatDetectionEnabled(prev => !prev)} />
-                </label>
-                <label className="flex items-center justify-between gap-3">
-                  <span>警戒表示を見せる</span>
-                  <input type="checkbox" checked={threatDisplayEnabled} onChange={() => setThreatDisplayEnabled(prev => !prev)} />
-                </label>
-                <label className="flex items-center justify-between gap-3">
-                  <span>デバッグモード</span>
-                  <input type="checkbox" checked={debugMode} onChange={() => setDebugMode(prev => !prev)} />
-                </label>
+                {settingToggles.map(item => {
+                  const checked =
+                    item.key === 'grid' ? showGridAssist
+                    : item.key === 'threatDetect' ? threatDetectionEnabled
+                    : item.key === 'threatDisplay' ? threatDisplayEnabled
+                    : debugMode;
+                  const toggle =
+                    item.key === 'grid' ? () => setShowGridAssist(prev => !prev)
+                    : item.key === 'threatDetect' ? () => setThreatDetectionEnabled(prev => !prev)
+                    : item.key === 'threatDisplay' ? () => setThreatDisplayEnabled(prev => !prev)
+                    : () => setDebugMode(prev => !prev);
+
+                  return (
+                    <label key={item.key} className="flex items-center justify-between gap-3">
+                      <span>{item.label}</span>
+                      <input type="checkbox" checked={checked} onChange={toggle} />
+                    </label>
+                  );
+                })}
               </div>
               <div className="mt-3 text-[10px] text-slate-500">P を押しながら DEBUG と入力しても切り替えできます。</div>
             </div>
@@ -294,8 +403,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                     <span
                       className="h-3.5 w-3.5 rounded"
                       style={{
-                        backgroundColor: getPhaseLegendStyle(currentCell?.phase ?? 0, currentCell?.lastPlayer ?? 'white', visualTuning).swatch,
-                        border: `1px solid ${getPhaseLegendStyle(currentCell?.phase ?? 0, currentCell?.lastPlayer ?? 'white', visualTuning).border}`,
+                        backgroundColor: currentPhaseStyle.swatch,
+                        border: `1px solid ${currentPhaseStyle.border}`,
                       }}
                     />
                     <span className="font-mono text-slate-100">{currentCell?.phase ?? 0}</span>
@@ -330,7 +439,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
           <PanelCard title="断面表示" subtitle="表示する切り出し面">
             <div className="space-y-4 text-xs">
               <div className="grid grid-cols-4 gap-1.5 rounded-xl border border-slate-800 bg-slate-900 p-1">
-                {(['Z', 'Y', 'X', 'none'] as const).map((axis) => (
+                {(['Z', 'Y', 'X', 'none'] as const).map(axis => (
                   <button
                     key={axis}
                     onClick={() => setSliceAxis(axis)}
@@ -424,110 +533,31 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
         <div className="w-full max-w-sm justify-self-center">
           <PanelCard title="位相ガイド" subtitle="白石と黒石の見え方" defaultCollapsed>
-            <div className="space-y-1.5 font-mono text-[10px]">
-              {Array.from({ length: 10 }).map((_, phase) => (
-                <div key={phase} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-2.5 py-2">
-                  <div className="w-6 text-slate-400">{phase}</div>
-                  <div className="flex flex-1 items-center gap-2">
-                    <div
-                      className="h-4 flex-1 rounded"
-                      style={{
-                        backgroundColor: getPhaseLegendStyle(phase, 'white', visualTuning).swatch,
-                        border: `1px solid ${getPhaseLegendStyle(phase, 'white', visualTuning).border}`,
-                      }}
-                    />
-                    <span className="w-3 text-slate-500">白</span>
-                    <div
-                      className="h-4 flex-1 rounded"
-                      style={{
-                        backgroundColor: getPhaseLegendStyle(phase, 'black', visualTuning).swatch,
-                        border: `1px solid ${getPhaseLegendStyle(phase, 'black', visualTuning).border}`,
-                      }}
-                    />
-                    <span className="w-3 text-slate-500">黒</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <PhaseGuide visualTuning={visualTuning} />
           </PanelCard>
         </div>
 
         <div className="w-full max-w-[19rem] justify-self-end">
           <PanelCard title="操作" subtitle="ドラッグ・ホイール・切替" defaultCollapsed>
             <div className="space-y-2 text-[11px] text-slate-300">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">通常ドラッグ</span>
-                <span className="ml-2 text-slate-400">回転</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Shift + ホバー / クリック</span>
-                <span className="ml-2 text-slate-400">X 軸固定</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Ctrl + ホバー / クリック</span>
-                <span className="ml-2 text-slate-400">Z 軸固定</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Shift + Ctrl</span>
-                <span className="ml-2 text-slate-400">XZ 軸固定</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Alt + ドラッグ</span>
-                <span className="ml-2 text-slate-400">上下で Y、左右で Z 断面変更</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">ホイール</span>
-                <span className="ml-2 text-slate-400">ズーム</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Shift / Alt / Ctrl + ホイール</span>
-                <span className="ml-2 text-slate-400">X / Y / Z 指定位置変更</span>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">G</span>
-                <span className="ml-2 text-slate-400">グリッド補助切替</span>
-              </div>
+              {controlRows.map(([label, detail]) => (
+                <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+                  <span className="font-semibold text-slate-100">{label}</span>
+                  <span className="ml-2 text-slate-400">{detail}</span>
+                </div>
+              ))}
             </div>
           </PanelCard>
         </div>
       </div>
 
-      {winInfo && isWinOverlayVisible ? (
-        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 backdrop-blur-sm">
-          <div className="w-full max-w-md space-y-5 rounded-3xl border border-slate-700 bg-slate-950/92 p-8 text-center shadow-2xl">
-            <div className="flex items-start justify-between">
-              <div />
-              <button
-                onClick={() => setIsWinOverlayVisible(false)}
-                className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-                title="閉じる"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-3xl font-bold text-slate-950">
-              勝
-            </div>
-            <div>
-              <h2 className="text-2xl font-extrabold uppercase tracking-wide text-yellow-300">
-                {winInfo.winner === 'white' ? '白の勝ち' : '黒の勝ち'}
-              </h2>
-              <div className="mt-2 text-xs uppercase tracking-[0.25em] text-slate-500">
-                {winInfo.type === 'streak' ? '同位置5コンボ' : 'XYZ5連 + 位相条件'}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm leading-relaxed text-slate-200">
-              {winInfo.description}
-            </div>
-            <div className="text-[11px] text-slate-500">数秒後に自動で閉じます。閉じても勝敗は維持され、追加の着手はできません。</div>
-            <button
-              onClick={onReset}
-              className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 py-3 font-extrabold text-slate-950 transition-transform active:scale-[0.98]"
-            >
-              もう一度遊ぶ
-            </button>
-          </div>
-        </div>
+      {winInfo ? (
+        <WinOverlay
+          winInfo={winInfo}
+          visible={isWinOverlayVisible}
+          onClose={() => setIsWinOverlayVisible(false)}
+          onReset={onReset}
+        />
       ) : null}
     </div>
   );

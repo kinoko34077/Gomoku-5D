@@ -6,6 +6,60 @@ interface GameControlsGuideProps {
   onClose: () => void;
 }
 
+const playSteps = [
+  '断面を見ながら、狙いたい座標を探します。',
+  '必要に応じて X / Y / Z の断面を切り替え、立体位置を把握します。',
+  '同じマスに重ねて置くと、位相と同位置コンボが進みます。',
+  'インスペクタで現在マスの位相とコンボ数を確認できます。',
+  '警戒表示を有効にすると、あと1手で危険な筋を確認できます。',
+];
+
+const keyboardRows = [
+  ['XY 移動', 'W / A / S / D'],
+  ['Z 移動', 'Q / E'],
+  ['石を置く', 'Space / Enter'],
+  ['グリッド切替', 'G'],
+  ['デバッグ切替', 'P + DEBUG'],
+];
+
+const mouseRows = [
+  '通常ドラッグ: 回転',
+  'Shift + ホバー / クリック: X 軸固定',
+  'Ctrl + ホバー / クリック: Z 軸固定',
+  'Shift + Ctrl: XZ 軸固定',
+  'Alt + ドラッグ: 上下で Y、左右で Z 断面変更',
+  'ホイール: ズーム',
+  'Shift / Alt / Ctrl + ホイール: X / Y / Z の指定位置変更',
+];
+
+const touchRows = [
+  '1本指: 回転',
+  '2本指スワイプ: 断面移動',
+  '2本指ひねり: カメラのひねり回転',
+];
+
+function GuideSection({
+  title,
+  icon,
+  accentClass,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  accentClass: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
+      <h3 className={`mb-3 flex items-center gap-2 text-sm font-semibold ${accentClass}`}>
+        {icon}
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
@@ -20,6 +74,7 @@ export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, on
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+            title="閉じる"
           >
             <X size={20} />
           </button>
@@ -27,82 +82,65 @@ export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, on
 
         <div className="grid max-h-[75vh] gap-6 overflow-y-auto pr-2 md:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-5">
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-400">
-                <BookOpen size={16} />
-                ゲーム概要
-              </h3>
+            <GuideSection title="ゲーム概要" icon={<BookOpen size={16} />} accentClass="text-emerald-400">
               <div className="space-y-2 text-sm leading-7 text-slate-200">
                 <p>このゲームは 3D 空間の盤面に石を置いていく五次元五目です。</p>
-                <p>ただ並べるだけではなく、各マスには位相があり、同じ場所に重ねて置くと位相と同位置コンボが進みます。</p>
-                <p>断面表示を切り替えると、X / Y / Z ごとの層を確認しながら立体的に読み合えます。</p>
+                <p>各マスには位相があり、同じ場所に重ねて置くと位相と同位置コンボが進みます。</p>
+                <p>断面表示を切り替えることで、X / Y / Z ごとの層を見ながら立体的に読み合えます。</p>
               </div>
-            </section>
+            </GuideSection>
 
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-400">
-                <Trophy size={16} />
-                勝利条件
-              </h3>
+            <GuideSection title="勝利条件" icon={<Trophy size={16} />} accentClass="text-amber-400">
               <div className="space-y-3 text-sm leading-7 text-slate-200">
                 <p>1. 同じ場所に 5 回重ねて置き、同位置 5 コンボを作る。</p>
-                <p>2. XYZ 空間上で 5 連を作り、さらにその 5 マスの位相がそろうか、階段状につながる。</p>
+                <p>2. XYZ 空間上で 5 連を作り、その 5 マスの位相がそろうか、階段状につながる。</p>
                 <p>つまり、空間 5 連だけでは勝ちになりません。</p>
               </div>
-            </section>
+            </GuideSection>
 
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-sky-400">遊び方の流れ</h3>
+            <GuideSection title="遊び方の流れ" accentClass="text-sky-400">
               <div className="space-y-2 text-sm leading-7 text-slate-200">
-                <p>・まず断面を確認して、狙いたい座標を見つけます。</p>
-                <p>・必要なら X / Y / Z の断面を切り替えて、立体位置を把握します。</p>
-                <p>・同じマスに重ねて置くと位相とコンボが進みます。</p>
-                <p>・左のインスペクタでは、選んでいるマスの位相とコンボ数を確認できます。</p>
-                <p>・警戒表示を有効にすると、あと 1 手で危険な筋を確認できます。</p>
+                {playSteps.map(step => (
+                  <p key={step}>・{step}</p>
+                ))}
               </div>
-            </section>
+            </GuideSection>
           </div>
 
           <div className="space-y-5">
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-400">
-                <Keyboard size={16} />
-                キーボード
-              </h3>
+            <GuideSection title="キーボード" icon={<Keyboard size={16} />} accentClass="text-emerald-400">
               <div className="space-y-2 text-xs text-slate-200">
-                <div className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"><span>XY 移動</span><kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">W / A / S / D</kbd></div>
-                <div className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"><span>Z 移動</span><kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">Q / E</kbd></div>
-                <div className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"><span>石を置く</span><kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">Space / Enter</kbd></div>
-                <div className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"><span>グリッド切替</span><kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">G</kbd></div>
-                <div className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"><span>デバッグ切替</span><kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">P + DEBUG</kbd></div>
+                {keyboardRows.map(([label, key]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2"
+                  >
+                    <span>{label}</span>
+                    <kbd className="rounded border border-gray-700 bg-gray-800 px-2 py-0.5 font-mono">{key}</kbd>
+                  </div>
+                ))}
               </div>
-            </section>
+            </GuideSection>
 
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-blue-400">
-                <MousePointer size={16} />
-                マウス
-              </h3>
+            <GuideSection title="マウス" icon={<MousePointer size={16} />} accentClass="text-blue-400">
               <div className="space-y-2 text-xs text-slate-200">
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">通常ドラッグ: 回転</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">Shift + ドラッグ: X 断面変更</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">Alt + ドラッグ: 上下で Y、左右で Z 断面変更</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">ホイール: ズーム</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">Shift / Alt / Ctrl + ホイール: X / Y / Z の指定位置変更</div>
+                {mouseRows.map(row => (
+                  <div key={row} className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">
+                    {row}
+                  </div>
+                ))}
               </div>
-            </section>
+            </GuideSection>
 
-            <section className="rounded-2xl border border-gray-800/80 bg-slate-950/55 p-4">
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-purple-400">
-                <Hand size={16} />
-                タッチ操作
-              </h3>
+            <GuideSection title="タッチ操作" icon={<Hand size={16} />} accentClass="text-purple-400">
               <div className="space-y-2 text-xs text-slate-200">
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">1本指: 回転</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">2本指スワイプ: 断面移動</div>
-                <div className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">2本指ひねり: カメラのひねり回転</div>
+                {touchRows.map(row => (
+                  <div key={row} className="rounded-lg border border-gray-800/70 bg-slate-950/60 px-3 py-2">
+                    {row}
+                  </div>
+                ))}
               </div>
-            </section>
+            </GuideSection>
           </div>
         </div>
 

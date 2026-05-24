@@ -82,6 +82,65 @@ export function get3DPosition(x: number, y: number, z: number, size: number, cel
   );
 }
 
+export function isCoordInSlice(
+  coord: Coordinate,
+  axis: 'X' | 'Y' | 'Z' | 'none',
+  index: number,
+) {
+  if (axis === 'none') return true;
+  if (axis === 'X') return coord[0] === index;
+  if (axis === 'Y') return coord[1] === index;
+  return coord[2] === index;
+}
+
+export function buildGridPointSets(
+  boardSize: number,
+  cellSpacing: number,
+  sliceAxis: 'X' | 'Y' | 'Z' | 'none',
+  sliceIndex: number,
+) {
+  const outerPoints: number[] = [];
+  const slicePoints: number[] = [];
+
+  const pushSegment = (from: Coordinate, to: Coordinate) => {
+    const p1 = get3DPosition(from[0], from[1], from[2], boardSize, cellSpacing);
+    const p2 = get3DPosition(to[0], to[1], to[2], boardSize, cellSpacing);
+    const target =
+      sliceAxis !== 'none' &&
+      isCoordInSlice(from, sliceAxis, sliceIndex) &&
+      isCoordInSlice(to, sliceAxis, sliceIndex)
+        ? slicePoints
+        : outerPoints;
+    target.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+  };
+
+  for (let y = 0; y < boardSize; y++) {
+    for (let z = 0; z < boardSize; z++) {
+      for (let x = 0; x < boardSize - 1; x++) {
+        pushSegment([x, y, z], [x + 1, y, z]);
+      }
+    }
+  }
+
+  for (let x = 0; x < boardSize; x++) {
+    for (let z = 0; z < boardSize; z++) {
+      for (let y = 0; y < boardSize - 1; y++) {
+        pushSegment([x, y, z], [x, y + 1, z]);
+      }
+    }
+  }
+
+  for (let x = 0; x < boardSize; x++) {
+    for (let y = 0; y < boardSize; y++) {
+      for (let z = 0; z < boardSize - 1; z++) {
+        pushSegment([x, y, z], [x, y, z + 1]);
+      }
+    }
+  }
+
+  return { outerPoints, slicePoints };
+}
+
 export function createSliceBoardPlane(
   boardSize: number,
   axis: 'X' | 'Y' | 'Z' | 'none',
