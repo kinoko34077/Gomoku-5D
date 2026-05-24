@@ -12,21 +12,23 @@ interface DebugVisualPanelProps {
 }
 
 const TUNING_SLIDERS: Array<[keyof VisualTuning, string, number, number, number]> = [
-  ['backgroundGray', 'bg', -64, 255, 1],
-  ['outerGridOpacity', 'grid alpha', -1, 1, 0.01],
-  ['sliceGridOpacity', 'slice line', -1, 1.5, 0.01],
-  ['slicePlaneOpacity', 'slice plane', -1, 1.5, 0.01],
-  ['offSliceStoneOpacity', 'off-slice stone', -1, 1.5, 0.01],
-  ['offSliceEmptyOpacity', 'off-slice empty', -1, 1.5, 0.01],
-  ['outerDashSize', 'dash', -0.5, 0.8, 0.01],
-  ['outerGapSize', 'gap', -0.5, 0.8, 0.01],
-  ['phaseSaturationBoost', 'sat boost', -1, 1, 0.01],
-  ['whitePhaseLightness', 'white light', -0.5, 1, 0.01],
-  ['blackPhaseLightness', 'black light', -0.5, 1, 0.01],
-  ['phaseGlow', 'phase glow', -0.5, 1, 0.01],
-  ['stoneScale', 'stone size', -3, 3, 0.01],
-  ['countMarkerScale', 'number size', -2, 2, 0.01],
-  ['countMarkerOffset', 'number offset', -2, 2, 0.01],
+  ['backgroundGray', '背景', -64, 255, 1],
+  ['outerGridOpacity', '外側グリッド透明度', -1, 1, 0.01],
+  ['sliceGridOpacity', '断面線透明度', -1, 1.5, 0.01],
+  ['slicePlaneOpacity', '断面面透明度', -1, 1.5, 0.01],
+  ['offSliceStoneOpacity', '断面外の石透明度', -1, 1.5, 0.01],
+  ['offSliceEmptyOpacity', '断面外の空点透明度', -1, 1.5, 0.01],
+  ['outerDashSize', '破線長さ', -0.5, 0.8, 0.01],
+  ['outerGapSize', '破線間隔', -0.5, 0.8, 0.01],
+  ['phaseSaturationBoost', '位相彩度補正', -1, 1, 0.01],
+  ['whitePhaseLightness', '白石明度', -0.5, 1, 0.01],
+  ['blackPhaseLightness', '黒石明度', -0.5, 1, 0.01],
+  ['phaseGlow', '位相発光', -0.5, 1, 0.01],
+  ['stoneScale', '石サイズ', -3, 3, 0.01],
+  ['countMarkerScale', '数字サイズ', -2, 2, 0.01],
+  ['countMarkerOffset', '数字浮遊距離', -2, 2, 0.01],
+  ['focusFadeStrength', '焦点フェード', -1, 2, 0.01],
+  ['frontDepthFadeStrength', '手前フェード', -1, 2, 0.01],
 ];
 
 export function DebugVisualPanel({ visualTuning, onChange }: DebugVisualPanelProps) {
@@ -82,21 +84,21 @@ export function DebugVisualPanel({ visualTuning, onChange }: DebugVisualPanelPro
           onMouseDown={handleMouseDown}
         >
           <div>
-            <div className="font-semibold">Debug Visual Tuning</div>
-            <div className="text-[10px] text-slate-500">drag this header to move</div>
+            <div className="font-semibold">デバッグ表示調整</div>
+            <div className="text-[10px] text-slate-500">この見出しをドラッグして移動</div>
           </div>
           <div className="flex items-center gap-2">
             <button
               className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-800"
               onClick={() => onChange(defaultVisualTuning)}
             >
-              reset
+              初期値
             </button>
             <button
               className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-800"
               onClick={() => setCollapsed(prev => !prev)}
             >
-              {collapsed ? 'open' : 'fold'}
+              {collapsed ? '開く' : '畳む'}
             </button>
           </div>
         </div>

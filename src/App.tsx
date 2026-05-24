@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { GameBoard } from './components/GameBoard';
+import { useEffect, useRef, useState } from 'react';
 import { DebugVisualPanel } from './components/DebugVisualPanel';
+import { GameBoard } from './components/GameBoard';
 import { GameControlsGuide } from './components/GameControlsGuide';
 import { UIOverlay } from './components/UIOverlay';
 import { useFiveDGomoku } from './hooks/useFiveDGomoku';
@@ -8,7 +8,10 @@ import { defaultVisualTuning, type VisualTuning } from './visualTuning';
 
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   const [visualTuning, setVisualTuning] = useState<VisualTuning>(defaultVisualTuning);
+  const debugChordRef = useRef('');
+  const debugPivotHeldRef = useRef(false);
   const {
     settings,
     setSettings,
@@ -27,6 +30,11 @@ export default function App() {
     sliceIndex,
     setSliceIndex,
     showGridAssist,
+    setShowGridAssist,
+    threatDetectionEnabled,
+    setThreatDetectionEnabled,
+    threatDisplayEnabled,
+    setThreatDisplayEnabled,
     syncSlice,
     executeMove,
     handleUndo,
@@ -35,6 +43,44 @@ export default function App() {
     canUndo,
     canRedo,
   } = useFiveDGomoku();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const tag = (event.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+
+      const key = event.key.toUpperCase();
+      if (key === 'P') {
+        debugPivotHeldRef.current = true;
+        debugChordRef.current = '';
+        return;
+      }
+
+      if (!debugPivotHeldRef.current || key.length !== 1 || key < 'A' || key > 'Z') return;
+      debugChordRef.current = (debugChordRef.current + key).slice(-5);
+      if (debugChordRef.current === 'DEBUG') {
+        event.preventDefault();
+        setDebugMode(prev => !prev);
+        debugChordRef.current = '';
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key.toUpperCase() === 'P') {
+        debugPivotHeldRef.current = false;
+        debugChordRef.current = '';
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  const visibleThreats = threatDisplayEnabled ? threats : [];
 
   return (
     <div
@@ -56,9 +102,10 @@ export default function App() {
           sliceAxis={sliceAxis}
           sliceIndex={sliceIndex}
           winInfo={winInfo}
-          threats={threats}
+          threats={visibleThreats}
           showGridAssist={showGridAssist}
           visualTuning={visualTuning}
+          showDiagnostics={debugMode}
         />
 
         <UIOverlay
@@ -75,8 +122,16 @@ export default function App() {
           sliceIndex={sliceIndex}
           setSliceIndex={setSliceIndex}
           winInfo={winInfo}
-          threats={threats}
+          threats={visibleThreats}
           visualTuning={visualTuning}
+          showGridAssist={showGridAssist}
+          setShowGridAssist={setShowGridAssist}
+          threatDetectionEnabled={threatDetectionEnabled}
+          setThreatDetectionEnabled={setThreatDetectionEnabled}
+          threatDisplayEnabled={threatDisplayEnabled}
+          setThreatDisplayEnabled={setThreatDisplayEnabled}
+          debugMode={debugMode}
+          setDebugMode={setDebugMode}
           onUndo={handleUndo}
           onRedo={handleRedo}
           onReset={handleReset}
@@ -94,21 +149,19 @@ export default function App() {
             <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '150ms' }} />
             <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '300ms' }} />
           </div>
-          <span className="font-sans text-xs font-semibold tracking-wide text-purple-300">
-            AI is planning...
-          </span>
+          <span className="font-sans text-xs font-semibold tracking-wide text-purple-300">AI が思考中...</span>
         </div>
       ) : null}
 
-      {performanceState.isLagging ? (
+      {debugMode && performanceState.isLagging ? (
         <div className="absolute bottom-4 left-4 z-40 rounded-2xl border border-red-500/30 bg-red-950/80 px-4 py-3 text-xs text-red-100 shadow-xl backdrop-blur-md">
-          <div className="font-semibold">Performance warning</div>
-          <div>threat calc: {performanceState.threatCalcMs.toFixed(1)} ms</div>
-          <div>worst frame: {performanceState.worstFrameMs.toFixed(1)} ms</div>
+          <div className="font-semibold">性能警告</div>
+          <div>警戒計算: {performanceState.threatCalcMs.toFixed(1)} ms</div>
+          <div>最大フレーム: {performanceState.worstFrameMs.toFixed(1)} ms</div>
         </div>
       ) : null}
 
-      <DebugVisualPanel visualTuning={visualTuning} onChange={setVisualTuning} />
+      {debugMode ? <DebugVisualPanel visualTuning={visualTuning} onChange={setVisualTuning} /> : null}
 
       <GameControlsGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>

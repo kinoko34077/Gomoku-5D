@@ -11,6 +11,7 @@ import {
   disposeObject3D,
   get3DPosition,
   getHoveredCoord,
+  multiplyObjectOpacity,
 } from './gameBoardHelpers';
 
 interface GameBoardProps {
@@ -26,6 +27,7 @@ interface GameBoardProps {
   threats: Threat[];
   showGridAssist: boolean;
   visualTuning: VisualTuning;
+  showDiagnostics: boolean;
 }
 
 export const GameBoard: React.FC<GameBoardProps> = ({
@@ -41,6 +43,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   threats,
   showGridAssist,
   visualTuning,
+  showDiagnostics,
 }) => {
   const outerGridColor = 0xe2e8f0;
   const sliceGridColor = 0x3f2c18;
@@ -159,6 +162,36 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   const clampIndex = (value: number, size: number) => Math.max(0, Math.min(size - 1, value));
+
+  const getVisibilityFade = (coord: Coordinate, pos: THREE.Vector3, inSlice: boolean, boardSize: number) => {
+    const sizeNorm = Math.max(1, boardSize - 1);
+    const activeAxis = propsRef.current.sliceAxis;
+    const activeIndex = propsRef.current.sliceIndex;
+    const [cx, cy, cz] = propsRef.current.cursor;
+    const axisDistance =
+      activeAxis === 'X' ? Math.abs(coord[0] - activeIndex)
+      : activeAxis === 'Y' ? Math.abs(coord[1] - activeIndex)
+      : activeAxis === 'Z' ? Math.abs(coord[2] - activeIndex)
+      : 0;
+    const cursorDistance = Math.hypot(coord[0] - cx, coord[1] - cy, coord[2] - cz) / sizeNorm;
+    const focusPenalty = (activeAxis === 'none' ? 0 : axisDistance / sizeNorm) * 0.78 + cursorDistance * 0.22;
+    const focusFade = 1 - propsRef.current.visualTuning.focusFadeStrength * focusPenalty;
+
+    let frontFade = 1;
+    if (cameraRef.current && controlsRef.current) {
+      const viewVector = new THREE.Vector3()
+        .subVectors(cameraRef.current.position, controlsRef.current.target)
+        .normalize();
+      const signedDepth = new THREE.Vector3().subVectors(pos, controlsRef.current.target).dot(viewVector);
+      const maxDepth = (boardSize * cellSpacing) / 2;
+      const frontDepth = Math.max(0, signedDepth / Math.max(0.001, maxDepth));
+      frontFade = 1 - propsRef.current.visualTuning.frontDepthFadeStrength * frontDepth;
+    }
+
+    return inSlice
+      ? Math.max(0.38, Math.min(1, focusFade * 0.9 * frontFade))
+      : Math.max(0.06, Math.min(1, focusFade * frontFade));
+  };
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -356,7 +389,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             if (axis === 'Y' && y !== idx) inSlice = false;
             if (axis === 'Z' && z !== idx) inSlice = false;
 
-            const emptyOpacity = inSlice ? 0.32 : propsRef.current.visualTuning.offSliceEmptyOpacity;
+            const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
+            const emptyOpacity = (inSlice ? 0.32 : propsRef.current.visualTuning.offSliceEmptyOpacity) * visibilityFade;
 
             let mesh: THREE.Object3D;
 
@@ -375,6 +409,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               scene.add(mesh);
             } else {
               mesh = createStoneMesh(cell, pos, inSlice, baseGeom, propsRef.current.visualTuning);
+              multiplyObjectOpacity(mesh, visibilityFade);
               scene.add(mesh);
             }
 
@@ -497,7 +532,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const pickCoordAtClientPosition = (clientX: number, clientY: number): Coordinate | null =>
+    const pickCoordAtClientPosition = (
+      clientX: number,
+      clientY: number,
+      axisLocks?: { x: boolean; z: boolean },
+    ): Coordinate | null =>
       getHoveredCoord(
         clientX,
         clientY,
@@ -509,6 +548,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         propsRef.current.settings,
         propsRef.current.sliceAxis,
         propsRef.current.sliceIndex,
+        propsRef.current.cursor,
+        axisLocks,
       );
 
     const handleMouseMove = (event: MouseEvent) => {
@@ -560,7 +601,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         return;
       }
 
-      const coords = pickCoordAtClientPosition(event.clientX, event.clientY);
+      const coords = pickCoordAtClientPosition(event.clientX, event.clientY, {
+        x: event.shiftKey,
+        z: event.ctrlKey || event.metaKey,
+      });
       const boardSize = propsRef.current.settings.boardSize;
 
       if (coords) {
@@ -586,20 +630,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       if (event.button !== 0) return;
 
       hasDraggedCursorRef.current = false;
-      pressCoordRef.current = pickCoordAtClientPosition(event.clientX, event.clientY);
+      pressCoordRef.current = pickCoordAtClientPosition(event.clientX, event.clientY, {
+        x: event.shiftKey,
+        z: event.ctrlKey || event.metaKey,
+      });
       dragStartRef.current = {
         x: event.clientX,
         y: event.clientY,
         sliceIndex: propsRef.current.sliceIndex,
         axis: propsRef.current.sliceAxis,
       };
-
-      if (event.shiftKey) {
-        hasDraggedCursorRef.current = true;
-        dragModeRef.current = 'slice_x';
-        controls.enabled = false;
-        return;
-      }
 
       if (event.altKey) {
         hasDraggedCursorRef.current = true;
@@ -976,7 +1016,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             if (sliceAxis === 'Y' && y !== sliceIndex) inSlice = false;
             if (sliceAxis === 'Z' && z !== sliceIndex) inSlice = false;
 
-            const emptyOpacity = inSlice ? 0.32 : visualTuning.offSliceEmptyOpacity;
+            const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
+            const emptyOpacity = (inSlice ? 0.32 : visualTuning.offSliceEmptyOpacity) * visibilityFade;
 
             let mesh: THREE.Object3D;
 
@@ -994,6 +1035,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               scene.add(mesh);
             } else {
               mesh = createStoneMesh(cell, pos, inSlice, baseGeom, visualTuning);
+              multiplyObjectOpacity(mesh, visibilityFade);
               scene.add(mesh);
             }
 
@@ -1110,16 +1152,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         </span>
       </div>
 
-      {(renderIssue || renderMetrics.redrawMs > 40 || renderMetrics.boardEpoch !== renderMetrics.redrawEpoch || renderMetrics.stalledMs > 800) && (
+      {showDiagnostics && (renderIssue || renderMetrics.redrawMs > 40 || renderMetrics.boardEpoch !== renderMetrics.redrawEpoch || renderMetrics.stalledMs > 800) && (
         <div className="absolute left-4 bottom-24 z-40 rounded-xl border border-red-400/40 bg-black/70 px-3 py-2 text-[11px] text-white pointer-events-none">
           {renderIssue ? (
-            <div>render error: {renderIssue}</div>
+            <div>描画エラー: {renderIssue}</div>
           ) : (
             <>
-              <div>redraw: {renderMetrics.redrawMs.toFixed(1)} ms</div>
-              <div>tex: {renderMetrics.textures} geo: {renderMetrics.geometries}</div>
-              <div>board/redraw: {renderMetrics.boardEpoch}/{renderMetrics.redrawEpoch}</div>
-              <div>frame stall: {renderMetrics.stalledMs.toFixed(0)} ms</div>
+              <div>再描画: {renderMetrics.redrawMs.toFixed(1)} ms</div>
+              <div>テクスチャ: {renderMetrics.textures} / ジオメトリ: {renderMetrics.geometries}</div>
+              <div>盤面更新/描画: {renderMetrics.boardEpoch}/{renderMetrics.redrawEpoch}</div>
+              <div>停止時間: {renderMetrics.stalledMs.toFixed(0)} ms</div>
             </>
           )}
         </div>

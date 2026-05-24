@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Cpu,
   HelpCircle,
   Redo2,
   RotateCcw,
+  Settings2,
   Undo2,
   User,
+  X,
 } from 'lucide-react';
-import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
 import type { Threat } from '../gameLogic';
-import type { VisualTuning } from '../visualTuning';
 import { getPhaseLegendStyle } from '../phasePalette';
+import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
+import type { VisualTuning } from '../visualTuning';
 import { PanelCard } from './PanelCard';
 
 interface UIOverlayProps {
@@ -30,6 +32,14 @@ interface UIOverlayProps {
   winInfo: WinInfo | null;
   threats: Threat[];
   visualTuning: VisualTuning;
+  showGridAssist: boolean;
+  setShowGridAssist: (value: boolean | ((prev: boolean) => boolean)) => void;
+  threatDetectionEnabled: boolean;
+  setThreatDetectionEnabled: (value: boolean | ((prev: boolean) => boolean)) => void;
+  threatDisplayEnabled: boolean;
+  setThreatDisplayEnabled: (value: boolean | ((prev: boolean) => boolean)) => void;
+  debugMode: boolean;
+  setDebugMode: (value: boolean | ((prev: boolean) => boolean)) => void;
   onUndo: () => void;
   onRedo: () => void;
   onReset: () => void;
@@ -55,6 +65,14 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   winInfo,
   threats,
   visualTuning,
+  showGridAssist,
+  setShowGridAssist,
+  threatDetectionEnabled,
+  setThreatDetectionEnabled,
+  threatDisplayEnabled,
+  setThreatDisplayEnabled,
+  debugMode,
+  setDebugMode,
   onUndo,
   onRedo,
   onReset,
@@ -66,6 +84,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   const [cx, cy, cz] = cursor;
   const size = settings.boardSize;
   const currentCell = board[cx]?.[cy]?.[cz];
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWinOverlayVisible, setIsWinOverlayVisible] = useState(false);
+
+  useEffect(() => {
+    if (!winInfo) {
+      setIsWinOverlayVisible(false);
+      return;
+    }
+
+    setIsWinOverlayVisible(true);
+    const timer = window.setTimeout(() => {
+      setIsWinOverlayVisible(false);
+    }, 4500);
+
+    return () => window.clearTimeout(timer);
+  }, [winInfo]);
 
   const focusOnCell = (coord: Coordinate, axis: 'X' | 'Y' | 'Z') => {
     setSliceAxis(axis);
@@ -77,12 +111,12 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 text-white select-none md:p-5">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+      <div className="z-40 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <div className="pointer-events-auto max-w-md rounded-2xl border border-slate-700/85 bg-slate-950/78 px-4 py-3 shadow-2xl backdrop-blur-md">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-emerald-400">
-            <span>Gomoku 5D</span>
+            <span>五次元五目並べ</span>
             <span className="text-slate-600">/</span>
-            <span className="text-slate-500">Phase Gomoku</span>
+            <span className="text-slate-500">位相五目</span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
@@ -94,10 +128,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                 }`}
               />
               <div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Turn</div>
-                <div className="text-sm font-semibold text-slate-100">
-                  {activePlayer === 'white' ? 'White' : 'Black'}
-                </div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">手番</div>
+                <div className="text-sm font-semibold text-slate-100">{activePlayer === 'white' ? '白' : '黒'}</div>
               </div>
             </div>
 
@@ -105,26 +137,26 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
               {gameMode === 'local' ? (
                 <>
                   <User size={13} className="text-sky-400" />
-                  <span>Local 2P</span>
+                  <span>ローカル2P</span>
                 </>
               ) : (
                 <>
                   <Cpu size={13} className="text-violet-400" />
-                  <span>{gameMode === 'ai_white' ? 'AI plays White' : 'AI plays Black'}</span>
+                  <span>{gameMode === 'ai_white' ? '対AI: あなたは黒' : '対AI: あなたは白'}</span>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-slate-700/85 bg-slate-950/78 p-2 shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-auto relative z-[70] flex items-center gap-2 rounded-2xl border border-slate-700/85 bg-slate-950/92 p-2 shadow-2xl backdrop-blur-md">
           <button
             onClick={onUndo}
             disabled={!canUndo}
             className={`rounded-xl p-2.5 transition-all ${
               canUndo ? 'text-slate-200 hover:bg-slate-800 active:scale-95' : 'cursor-not-allowed text-slate-600'
             }`}
-            title="Undo"
+            title="元に戻す"
           >
             <Undo2 size={18} />
           </button>
@@ -134,7 +166,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             className={`rounded-xl p-2.5 transition-all ${
               canRedo ? 'text-slate-200 hover:bg-slate-800 active:scale-95' : 'cursor-not-allowed text-slate-600'
             }`}
-            title="Redo"
+            title="やり直す"
           >
             <Redo2 size={18} />
           </button>
@@ -142,40 +174,81 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
           <button
             onClick={onReset}
             className="rounded-xl p-2.5 text-slate-200 transition-all hover:bg-red-950/35 hover:text-red-300 active:scale-95"
-            title="Reset"
+            title="対局をリセット"
           >
             <RotateCcw size={18} />
           </button>
           <button
+            onClick={() => setIsSettingsOpen(prev => !prev)}
+            className="rounded-xl p-2.5 text-slate-200 transition-all hover:bg-slate-800 active:scale-95"
+            title="設定"
+          >
+            <Settings2 size={18} />
+          </button>
+          <button
             onClick={onGuideOpen}
             className="rounded-xl p-2.5 text-slate-200 transition-all hover:bg-slate-800 active:scale-95"
-            title="Guide"
+            title="ヘルプ"
           >
             <HelpCircle size={18} />
           </button>
+
+          {isSettingsOpen ? (
+            <div className="absolute right-0 top-[calc(100%+0.75rem)] z-[80] w-80 rounded-2xl border border-slate-700/90 bg-slate-950/98 p-4 text-xs text-slate-100 shadow-2xl backdrop-blur-md">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">設定</div>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                  title="閉じる"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-3">
+                  <span>グリッド補助を表示</span>
+                  <input type="checkbox" checked={showGridAssist} onChange={() => setShowGridAssist(prev => !prev)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span>警戒判定を行う</span>
+                  <input type="checkbox" checked={threatDetectionEnabled} onChange={() => setThreatDetectionEnabled(prev => !prev)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span>警戒表示を見せる</span>
+                  <input type="checkbox" checked={threatDisplayEnabled} onChange={() => setThreatDisplayEnabled(prev => !prev)} />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span>デバッグモード</span>
+                  <input type="checkbox" checked={debugMode} onChange={() => setDebugMode(prev => !prev)} />
+                </label>
+              </div>
+              <div className="mt-3 text-[10px] text-slate-500">P を押しながら DEBUG と入力しても切り替えできます。</div>
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="my-3 grid min-h-0 flex-1 grid-cols-[minmax(15rem,18rem)_1fr_minmax(16rem,19rem)] gap-3">
-        <div className="flex min-h-0 flex-col gap-3">
-          <PanelCard title="Settings" subtitle="mode and board size">
+        <div className="z-20 flex min-h-0 flex-col gap-3">
+          <PanelCard title="対局設定" subtitle="モードと盤面サイズ">
             <div className="space-y-4 text-xs">
               <label className="block">
-                <div className="mb-1.5 text-[10px] uppercase tracking-[0.18em] text-slate-500">Mode</div>
+                <div className="mb-1.5 text-[10px] uppercase tracking-[0.18em] text-slate-500">モード</div>
                 <select
                   value={gameMode}
-                  onChange={(e) => setGameMode(e.target.value as GameMode)}
+                  onChange={(event) => setGameMode(event.target.value as GameMode)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none transition-colors focus:border-emerald-500"
                 >
-                  <option value="local">Local 2P</option>
-                  <option value="ai_black">VS AI (you: White)</option>
-                  <option value="ai_white">VS AI (you: Black)</option>
+                  <option value="local">ローカル2P</option>
+                  <option value="ai_black">対AI: あなたは白</option>
+                  <option value="ai_white">対AI: あなたは黒</option>
                 </select>
               </label>
 
               <label className="block">
                 <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                  <span>Board Size</span>
+                  <span>盤面サイズ</span>
                   <span className="font-mono text-slate-300">{size} x {size} x {size}</span>
                 </div>
                 <input
@@ -183,24 +256,24 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                   min="5"
                   max="8"
                   value={size}
-                  onChange={(e) => setSettings({ ...settings, boardSize: Number(e.target.value) })}
+                  onChange={(event) => setSettings({ ...settings, boardSize: Number(event.target.value) })}
                   className="w-full accent-emerald-500"
                 />
-                <div className="mt-1 text-[10px] text-slate-500">size changes reset the current game</div>
+                <div className="mt-1 text-[10px] text-slate-500">サイズ変更時は現在の対局をリセットします。</div>
               </label>
             </div>
           </PanelCard>
 
-          <PanelCard title="Inspector" subtitle="selected cell state">
+          <PanelCard title="インスペクタ" subtitle="選択中マスの状態">
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 font-mono">
-                <span className="text-slate-500">cursor</span>
+                <span className="text-slate-500">カーソル</span>
                 <span className="text-emerald-400">({cx}, {cy}, {cz})</span>
               </div>
 
               <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500">owner</span>
+                  <span className="text-slate-500">最後の手</span>
                   {currentCell?.lastPlayer ? (
                     <span className="flex items-center gap-2 font-medium">
                       <span
@@ -208,15 +281,15 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                           currentCell.lastPlayer === 'white' ? 'bg-white ring-1 ring-slate-400' : 'bg-black ring-1 ring-slate-500'
                         }`}
                       />
-                      <span>{currentCell.lastPlayer}</span>
+                      <span>{currentCell.lastPlayer === 'white' ? '白' : '黒'}</span>
                     </span>
                   ) : (
-                    <span className="text-slate-500">empty</span>
+                    <span className="text-slate-500">空</span>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500">phase</span>
+                  <span className="text-slate-500">位相</span>
                   <div className="flex items-center gap-2">
                     <span
                       className="h-3.5 w-3.5 rounded"
@@ -231,11 +304,11 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-2 text-center">
-                    <div className="text-[10px] text-slate-500">white combo</div>
+                    <div className="text-[10px] text-slate-500">白コンボ</div>
                     <div className="text-sm font-semibold text-white">{currentCell?.streak.white ?? 0}</div>
                   </div>
                   <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-2 text-center">
-                    <div className="text-[10px] text-slate-500">black combo</div>
+                    <div className="text-[10px] text-slate-500">黒コンボ</div>
                     <div className="text-sm font-semibold text-slate-300">{currentCell?.streak.black ?? 0}</div>
                   </div>
                 </div>
@@ -245,7 +318,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                 onClick={() => onCellClick(cx, cy, cz)}
                 className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2 font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
               >
-                place stone here
+                ここに置く
               </button>
             </div>
           </PanelCard>
@@ -253,8 +326,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
         <div />
 
-        <div className="flex min-h-0 flex-col gap-3">
-          <PanelCard title="Slice" subtitle="cross section view">
+        <div className="z-20 flex min-h-0 flex-col gap-3">
+          <PanelCard title="断面表示" subtitle="表示する切り出し面">
             <div className="space-y-4 text-xs">
               <div className="grid grid-cols-4 gap-1.5 rounded-xl border border-slate-800 bg-slate-900 p-1">
                 {(['Z', 'Y', 'X', 'none'] as const).map((axis) => (
@@ -265,7 +338,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                       sliceAxis === axis ? 'bg-sky-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
-                    {axis === 'none' ? 'all' : axis}
+                    {axis === 'none' ? '全層' : axis}
                   </button>
                 ))}
               </div>
@@ -273,8 +346,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
               {sliceAxis !== 'none' ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-slate-300">
-                    <span>{sliceAxis} index</span>
-                    <span className="font-mono">{sliceIndex} / {size - 1}</span>
+                    <span>{sliceAxis} 位置</span>
+                    <span className="font-mono">
+                      {sliceIndex} / {size - 1}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -288,7 +363,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                       min="0"
                       max={size - 1}
                       value={sliceIndex}
-                      onChange={(e) => setSliceIndex(Number(e.target.value))}
+                      onChange={(event) => setSliceIndex(Number(event.target.value))}
                       className="w-full accent-sky-500"
                     />
                     <button
@@ -300,18 +375,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-slate-500">
-                  all slices visible
-                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-slate-500">全断面を表示中</div>
               )}
             </div>
           </PanelCard>
 
-          <PanelCard title="Threats" subtitle="focus dangerous lines" defaultCollapsed={threats.length === 0}>
+          <PanelCard title="警戒" subtitle="危険な筋を確認" defaultCollapsed={threats.length === 0}>
             <div className="max-h-[18rem] space-y-2 overflow-y-auto pr-1 text-xs">
               {threats.length === 0 ? (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-4 text-center text-slate-500">
-                  no immediate threats
+                  現在は警戒がありません
                 </div>
               ) : (
                 threats.map((threat, index) => {
@@ -332,7 +405,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                       <div className="flex items-center justify-between gap-3">
                         <span className="flex items-center gap-2 font-semibold">
                           <AlertTriangle size={12} />
-                          <span>{isStreak ? 'combo pressure' : 'line threat'}</span>
+                          <span>{isStreak ? '同位置コンボ警戒' : '5連警戒'}</span>
                         </span>
                         <span className="font-mono text-[10px] opacity-80">{targetCell.join(',')}</span>
                       </div>
@@ -349,8 +422,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
       <div className="grid grid-cols-[minmax(15rem,18rem)_1fr_minmax(16rem,19rem)] items-end gap-3">
         <div />
 
-        <div className="justify-self-center w-full max-w-sm">
-          <PanelCard title="Phase Guide" subtitle="white and black actual stone colors" defaultCollapsed>
+        <div className="w-full max-w-sm justify-self-center">
+          <PanelCard title="位相ガイド" subtitle="白石と黒石の見え方" defaultCollapsed>
             <div className="space-y-1.5 font-mono text-[10px]">
               {Array.from({ length: 10 }).map((_, phase) => (
                 <div key={phase} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-2.5 py-2">
@@ -363,7 +436,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                         border: `1px solid ${getPhaseLegendStyle(phase, 'white', visualTuning).border}`,
                       }}
                     />
-                    <span className="w-3 text-slate-500">W</span>
+                    <span className="w-3 text-slate-500">白</span>
                     <div
                       className="h-4 flex-1 rounded"
                       style={{
@@ -371,7 +444,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                         border: `1px solid ${getPhaseLegendStyle(phase, 'black', visualTuning).border}`,
                       }}
                     />
-                    <span className="w-3 text-slate-500">B</span>
+                    <span className="w-3 text-slate-500">黒</span>
                   </div>
                 </div>
               ))}
@@ -379,20 +452,28 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
           </PanelCard>
         </div>
 
-        <div className="justify-self-end w-full max-w-[19rem]">
-          <PanelCard title="Controls" subtitle="drag, wheel, and grid toggle" defaultCollapsed>
+        <div className="w-full max-w-[19rem] justify-self-end">
+          <PanelCard title="操作" subtitle="ドラッグ・ホイール・切替" defaultCollapsed>
             <div className="space-y-2 text-[11px] text-slate-300">
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
                 <span className="font-semibold text-slate-100">通常ドラッグ</span>
                 <span className="ml-2 text-slate-400">回転</span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Shift+ドラッグ</span>
-                <span className="ml-2 text-slate-400">X 切出し</span>
+                <span className="font-semibold text-slate-100">Shift + ホバー / クリック</span>
+                <span className="ml-2 text-slate-400">X 軸固定</span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-                <span className="font-semibold text-slate-100">Alt+ドラッグ</span>
-                <span className="ml-2 text-slate-400">上下で Y / 左右で Z 切出し</span>
+                <span className="font-semibold text-slate-100">Ctrl + ホバー / クリック</span>
+                <span className="ml-2 text-slate-400">Z 軸固定</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+                <span className="font-semibold text-slate-100">Shift + Ctrl</span>
+                <span className="ml-2 text-slate-400">XZ 軸固定</span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+                <span className="font-semibold text-slate-100">Alt + ドラッグ</span>
+                <span className="ml-2 text-slate-400">上下で Y、左右で Z 断面変更</span>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
                 <span className="font-semibold text-slate-100">ホイール</span>
@@ -404,35 +485,46 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
                 <span className="font-semibold text-slate-100">G</span>
-                <span className="ml-2 text-slate-400">グリッド表示切替</span>
+                <span className="ml-2 text-slate-400">グリッド補助切替</span>
               </div>
             </div>
           </PanelCard>
         </div>
       </div>
 
-      {winInfo ? (
-        <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+      {winInfo && isWinOverlayVisible ? (
+        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 backdrop-blur-sm">
           <div className="w-full max-w-md space-y-5 rounded-3xl border border-slate-700 bg-slate-950/92 p-8 text-center shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div />
+              <button
+                onClick={() => setIsWinOverlayVisible(false)}
+                className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                title="閉じる"
+              >
+                <X size={18} />
+              </button>
+            </div>
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-3xl font-bold text-slate-950">
-              W
+              勝
             </div>
             <div>
               <h2 className="text-2xl font-extrabold uppercase tracking-wide text-yellow-300">
-                {winInfo.winner === 'white' ? 'White wins' : 'Black wins'}
+                {winInfo.winner === 'white' ? '白の勝ち' : '黒の勝ち'}
               </h2>
               <div className="mt-2 text-xs uppercase tracking-[0.25em] text-slate-500">
-                {winInfo.type === 'streak' ? 'same cell combo' : 'xyz plus phase'}
+                {winInfo.type === 'streak' ? '同位置5コンボ' : 'XYZ5連 + 位相条件'}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm leading-relaxed text-slate-200">
               {winInfo.description}
             </div>
+            <div className="text-[11px] text-slate-500">数秒後に自動で閉じます。閉じても勝敗は維持され、追加の着手はできません。</div>
             <button
               onClick={onReset}
               className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 py-3 font-extrabold text-slate-950 transition-transform active:scale-[0.98]"
             >
-              play again
+              もう一度遊ぶ
             </button>
           </div>
         </div>

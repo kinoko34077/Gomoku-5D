@@ -59,6 +59,20 @@ export function disposeObject3D(object: THREE.Object3D) {
   });
 }
 
+export function multiplyObjectOpacity(object: THREE.Object3D, multiplier: number) {
+  object.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.material) return;
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(material => {
+        material.opacity *= multiplier;
+      });
+      return;
+    }
+    mesh.material.opacity *= multiplier;
+  });
+}
+
 export function get3DPosition(x: number, y: number, z: number, size: number, cellSpacing: number) {
   const offset = (size - 1) / 2;
   return new THREE.Vector3(
@@ -263,8 +277,10 @@ export function getHoveredCoord(
   mouse: THREE.Vector2,
   cellMeshes: Record<string, THREE.Object3D>,
   settings: { boardSize: number },
-  sliceAxis: 'X' | 'Y' | 'Z' | 'none',
-  sliceIndex: number,
+  _sliceAxis: 'X' | 'Y' | 'Z' | 'none',
+  _sliceIndex: number,
+  cursor: Coordinate,
+  axisLocks?: { x: boolean; z: boolean },
 ): Coordinate | null {
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -277,10 +293,6 @@ export function getHoveredCoord(
   for (let x = 0; x < settings.boardSize; x++) {
     for (let y = 0; y < settings.boardSize; y++) {
       for (let z = 0; z < settings.boardSize; z++) {
-        if (sliceAxis === 'X' && x !== sliceIndex) continue;
-        if (sliceAxis === 'Y' && y !== sliceIndex) continue;
-        if (sliceAxis === 'Z' && z !== sliceIndex) continue;
-
         const key = `${x},${y},${z}`;
         const target = cellMeshes[key];
         if (!target) continue;
@@ -302,5 +314,11 @@ export function getHoveredCoord(
     coords = (hitMesh.userData.coord as Coordinate | undefined) ?? coordMap[hitMesh.uuid];
   }
 
-  return coords ?? null;
+  if (!coords) return null;
+
+  const nextCoord: Coordinate = [...coords];
+  if (axisLocks?.x) nextCoord[0] = cursor[0];
+  if (axisLocks?.z) nextCoord[2] = cursor[2];
+
+  return nextCoord;
 }

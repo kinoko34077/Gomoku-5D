@@ -196,6 +196,11 @@ export interface Threat {
   description: string;
 }
 
+function getNextPhaseForThreatCell(cell: CellState): number {
+  const isFirstPlacement = cell.lastPlayer === null && cell.streak.white === 0 && cell.streak.black === 0;
+  return isFirstPlacement ? 0 : (cell.phase + 1) % 10;
+}
+
 export function detectThreats(board: Board, settings: GameSettings): Threat[] {
   const size = board.length;
   const len = settings.winLength;
@@ -211,7 +216,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             type: 'streak_pressure',
             player: 'white',
             cells: [[x, y, z]],
-            description: `White streak pressure (Streak: ${cell.streak.white}) at (${x}, ${y}, ${z})`,
+            description: `白の同位置コンボ警戒: ${cell.streak.white}連 (${x}, ${y}, ${z})`,
           });
         }
         if (cell.streak.black >= 3) {
@@ -219,7 +224,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             type: 'streak_pressure',
             player: 'black',
             cells: [[x, y, z]],
-            description: `Black streak pressure (Streak: ${cell.streak.black}) at (${x}, ${y}, ${z})`,
+            description: `黒の同位置コンボ警戒: ${cell.streak.black}連 (${x}, ${y}, ${z})`,
           });
         }
       }
@@ -251,7 +256,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             if (missingIndex === -1) continue;
 
             const phases = cells.map((cell, index) =>
-              index === missingIndex ? (cell.phase + 1) % 10 : cell.phase,
+              index === missingIndex ? getNextPhaseForThreatCell(cell) : cell.phase,
             );
 
             const allSamePhase = phases.every(phase => phase === phases[0]);
@@ -268,8 +273,8 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
               player,
               cells: lineCoords,
               description: allSamePhase
-                ? `${player.toUpperCase()} can finish XYZ + same-phase line in one move`
-                : `${player.toUpperCase()} can finish XYZ + staircase line in one move`,
+                ? `${player === 'white' ? '白' : '黒'}が1手で XYZ + 同位相5連`
+                : `${player === 'white' ? '白' : '黒'}が1手で XYZ + 階段位相5連`,
             });
           }
         }

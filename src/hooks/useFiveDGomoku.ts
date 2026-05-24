@@ -66,6 +66,8 @@ export function useFiveDGomoku() {
   const [sliceAxis, setSliceAxis] = useState<'X' | 'Y' | 'Z' | 'none'>('Z');
   const [sliceIndex, setSliceIndex] = useState(() => Math.floor(settings.boardSize / 2));
   const [showGridAssist, setShowGridAssist] = useState(true);
+  const [threatDetectionEnabled, setThreatDetectionEnabled] = useState(true);
+  const [threatDisplayEnabled, setThreatDisplayEnabled] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>(() => [
     {
       board: createEmptyBoard(settings.boardSize),
@@ -148,7 +150,7 @@ export function useFiveDGomoku() {
   }, [settings.boardSize, resetGameState]);
 
   useEffect(() => {
-    if (winInfo) {
+    if (winInfo || !threatDetectionEnabled) {
       setThreats([]);
       setPerformanceState(prev => ({ ...prev, threatCalcMs: 0 }));
       return;
@@ -172,7 +174,7 @@ export function useFiveDGomoku() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [board, settings, activePlayer, winInfo]);
+  }, [board, settings, activePlayer, winInfo, threatDetectionEnabled]);
 
   useEffect(() => {
     let frameId = 0;
@@ -393,6 +395,10 @@ export function useFiveDGomoku() {
     setSliceIndex,
     showGridAssist,
     setShowGridAssist,
+    threatDetectionEnabled,
+    setThreatDetectionEnabled,
+    threatDisplayEnabled,
+    setThreatDisplayEnabled,
     syncSlice,
     executeMove,
     handleUndo,
