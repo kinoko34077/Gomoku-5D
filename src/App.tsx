@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { DebugVisualPanel } from './components/DebugVisualPanel';
 import { GameBoard } from './components/GameBoard';
 import { GameControlsGuide } from './components/GameControlsGuide';
+import { StartScreen } from './components/StartScreen';
 import { UIOverlay } from './components/UIOverlay';
 import { useDebugModeToggle } from './hooks/useDebugModeToggle';
 import { useFiveDGomoku } from './hooks/useFiveDGomoku';
+import type { GameMode, GameSettings } from './types';
 import { defaultVisualTuning, type VisualTuning } from './visualTuning';
 
 function AiThinkingBanner() {
@@ -38,12 +40,14 @@ function PerformanceWarning({
 
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [hasStartedSession, setHasStartedSession] = useState(false);
   const [visualTuning, setVisualTuning] = useState<VisualTuning>(defaultVisualTuning);
   const [showHistoryControls, setShowHistoryControls] = useState(true);
   const { debugMode, setDebugMode } = useDebugModeToggle();
   const {
     settings,
     setSettings,
+    applySessionConfig,
     gameMode,
     setGameMode,
     isAiThinking,
@@ -74,6 +78,13 @@ export default function App() {
   } = useFiveDGomoku();
 
   const visibleThreats = threatDisplayEnabled ? threats : [];
+
+  const handleStartSession = (nextSettings: GameSettings, nextMode: GameMode) => {
+    applySessionConfig(nextSettings, nextMode);
+    setGameMode(nextMode);
+    setHasStartedSession(true);
+    setShowHistoryControls(nextSettings.undoRedoEnabled);
+  };
 
   return (
     <div
@@ -149,6 +160,14 @@ export default function App() {
       {debugMode ? <DebugVisualPanel visualTuning={visualTuning} onChange={setVisualTuning} /> : null}
 
       <GameControlsGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
+      {!hasStartedSession ? (
+        <StartScreen
+          initialSettings={settings}
+          initialGameMode={gameMode}
+          onStartLocal={handleStartSession}
+        />
+      ) : null}
     </div>
   );
 }

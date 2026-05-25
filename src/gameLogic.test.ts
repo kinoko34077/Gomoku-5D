@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createEmptyBoard, makeMove, checkWin } from './gameLogic';
-import type { Board, GameSettings, Player } from './types';
+import { DEFAULT_GAME_SETTINGS, type Board, type GameSettings, type Player } from './types';
+
+const TEST_SETTINGS: GameSettings = {
+  ...DEFAULT_GAME_SETTINGS,
+};
 
 function setCellState(
   board: Board,
@@ -14,7 +18,7 @@ function setCellState(
   const currentCell = currentBoard[x][y][z];
   const movesNeeded = currentCell.lastPlayer === null
     ? targetPhase + 1
-    : ((targetPhase - currentCell.phase + 10) % 10) || 10;
+    : ((targetPhase - currentCell.phase + TEST_SETTINGS.maxPhases) % TEST_SETTINGS.maxPhases) || TEST_SETTINGS.maxPhases;
   const opponent: Player = targetPlayer === 'white' ? 'black' : 'white';
   const sequence: Player[] = [];
 
@@ -27,7 +31,7 @@ function setCellState(
   }
 
   for (const player of sequence) {
-    currentBoard = makeMove(currentBoard, x, y, z, player);
+    currentBoard = makeMove(currentBoard, x, y, z, player, TEST_SETTINGS.maxPhases);
   }
 
   return currentBoard;
@@ -35,10 +39,7 @@ function setCellState(
 
 describe('Phase Gomoku 5D Engine Tests', () => {
   const settings: GameSettings = {
-    boardSize: 6,
-    maxPhases: 10,
-    winLength: 5,
-    streakWinLength: 5,
+    ...TEST_SETTINGS,
   };
 
   it('should initialize board correctly', () => {
@@ -57,19 +58,19 @@ describe('Phase Gomoku 5D Engine Tests', () => {
   it('should update cell state and streak on move', () => {
     let board = createEmptyBoard(settings.boardSize);
 
-    board = makeMove(board, 1, 1, 1, 'white');
+    board = makeMove(board, 1, 1, 1, 'white', settings.maxPhases);
     expect(board[1][1][1].phase).toBe(0);
     expect(board[1][1][1].lastPlayer).toBe('white');
     expect(board[1][1][1].streak.white).toBe(1);
     expect(board[1][1][1].streak.black).toBe(0);
 
-    board = makeMove(board, 1, 1, 1, 'white');
+    board = makeMove(board, 1, 1, 1, 'white', settings.maxPhases);
     expect(board[1][1][1].phase).toBe(1);
     expect(board[1][1][1].lastPlayer).toBe('white');
     expect(board[1][1][1].streak.white).toBe(2);
     expect(board[1][1][1].streak.black).toBe(0);
 
-    board = makeMove(board, 1, 1, 1, 'black');
+    board = makeMove(board, 1, 1, 1, 'black', settings.maxPhases);
     expect(board[1][1][1].phase).toBe(2);
     expect(board[1][1][1].lastPlayer).toBe('black');
     expect(board[1][1][1].streak.white).toBe(0);
@@ -79,15 +80,15 @@ describe('Phase Gomoku 5D Engine Tests', () => {
   it('should detect Streak Win (V-axis)', () => {
     let board = createEmptyBoard(settings.boardSize);
 
-    board = makeMove(board, 2, 2, 2, 'white');
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
     expect(checkWin(board, settings, 'white')).toBeNull();
 
-    board = makeMove(board, 2, 2, 2, 'white');
-    board = makeMove(board, 2, 2, 2, 'white');
-    board = makeMove(board, 2, 2, 2, 'white');
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
     expect(checkWin(board, settings, 'white')).toBeNull();
 
-    board = makeMove(board, 2, 2, 2, 'white');
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
     const win = checkWin(board, settings, 'white');
 
     expect(win).not.toBeNull();
@@ -141,7 +142,7 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     let board = createEmptyBoard(settings.boardSize);
 
     for (let i = 0; i < 4; i++) {
-      board = makeMove(board, 2, 2, 2, 'white');
+      board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
     }
 
     board = setCellState(board, 0, 2, 2, 4, 'white');
@@ -149,7 +150,7 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     board = setCellState(board, 3, 2, 2, 4, 'white');
     board = setCellState(board, 4, 2, 2, 4, 'white');
 
-    board = makeMove(board, 2, 2, 2, 'white');
+    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
 
     const win = checkWin(board, settings, 'white');
     expect(win).not.toBeNull();

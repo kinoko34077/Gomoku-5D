@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { computeBestMove } from '../ai';
 import { checkWin, makeMove, type Threat } from '../gameLogic';
-import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
+import { DEFAULT_GAME_SETTINGS, type Board, type Coordinate, type GameMode, type GameSettings, type Player, type WinInfo } from '../types';
 import {
   clampIndex,
   createHistoryEntry,
@@ -22,12 +22,7 @@ export interface PerformanceState {
 }
 
 export function useFiveDGomoku() {
-  const [settings, setSettings] = useState<GameSettings>({
-    boardSize: 6,
-    maxPhases: 10,
-    winLength: 5,
-    streakWinLength: 5,
-  });
+  const [settings, setSettings] = useState<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
   const [gameMode, setGameMode] = useState<GameMode>('local');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [board, setBoard] = useState<Board>(() => createInitialGameSnapshot(settings.boardSize).board);
@@ -129,7 +124,7 @@ export function useFiveDGomoku() {
 
     if (currentWin || (thinking && !options?.bypassThinkingGuard)) return;
 
-    const nextBoard = makeMove(currentBoard, x, y, z, player);
+    const nextBoard = makeMove(currentBoard, x, y, z, player, settings.maxPhases);
     const nextWin = checkWin(nextBoard, settings, player);
     const nextPlayer: Player = player === 'white' ? 'black' : 'white';
 
@@ -170,7 +165,8 @@ export function useFiveDGomoku() {
   }, [activePlayer, gameMode, executeMove, syncCursor]);
 
   const handleUndo = useCallback(() => {
-    const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode } = stateRef.current;
+    const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode, settings: currentSettings } = stateRef.current;
+    if (!currentSettings.undoRedoEnabled) return;
     if (currentHistoryIndex === 0) return;
 
     const targetIndex = getUndoTargetIndex(currentHistoryIndex, currentMode);
@@ -184,7 +180,8 @@ export function useFiveDGomoku() {
   }, [syncCursor]);
 
   const handleRedo = useCallback(() => {
-    const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode } = stateRef.current;
+    const { historyIndex: currentHistoryIndex, history: currentHistory, gameMode: currentMode, settings: currentSettings } = stateRef.current;
+    if (!currentSettings.undoRedoEnabled) return;
     if (currentHistoryIndex >= currentHistory.length - 1) return;
 
     const targetIndex = getRedoTargetIndex(currentHistoryIndex, currentHistory.length, currentMode);
@@ -200,6 +197,12 @@ export function useFiveDGomoku() {
   const handleReset = useCallback(() => {
     resetGameState(settings.boardSize);
   }, [resetGameState, settings.boardSize]);
+
+  const applySessionConfig = useCallback((nextSettings: GameSettings, nextGameMode: GameMode) => {
+    setSettings(nextSettings);
+    setGameMode(nextGameMode);
+    resetGameState(nextSettings.boardSize);
+  }, [resetGameState]);
 
   const moveCursor = useCallback((dx: number, dy: number, dz: number) => {
     const { cursor: currentCursor, settings: currentSettings } = stateRef.current;
@@ -287,6 +290,7 @@ export function useFiveDGomoku() {
   return {
     settings,
     setSettings,
+    applySessionConfig,
     gameMode,
     setGameMode,
     isAiThinking,
@@ -312,7 +316,8 @@ export function useFiveDGomoku() {
     handleUndo,
     handleRedo,
     handleReset,
-    canUndo: historyIndex > 0,
-    canRedo: historyIndex < history.length - 1,
+    moveCount: historyIndex,
+    canUndo: settings.undoRedoEnabled && historyIndex > 0,
+    canRedo: settings.undoRedoEnabled && historyIndex < history.length - 1,
   };
 }

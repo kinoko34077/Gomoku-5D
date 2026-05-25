@@ -31,6 +31,7 @@ export function makeMove(
   y: number,
   z: number,
   player: Player,
+  maxPhases = 10,
 ): Board {
   const newBoard: Board = board.map(plane =>
     plane.map(row =>
@@ -45,7 +46,7 @@ export function makeMove(
   const cell = newBoard[x][y][z];
   const prev = cell.lastPlayer;
   const isFirstPlacement = prev === null && cell.streak.white === 0 && cell.streak.black === 0;
-  cell.phase = isFirstPlacement ? 0 : (cell.phase + 1) % 10;
+  cell.phase = isFirstPlacement ? 0 : (cell.phase + 1) % maxPhases;
   cell.lastPlayer = player;
 
   if (prev === player) {
@@ -80,14 +81,14 @@ export function isOutOfBounds(x: number, y: number, z: number, size: number): bo
   return x < 0 || x >= size || y < 0 || y >= size || z < 0 || z >= size;
 }
 
-function isSequentialPhaseLine(phases: number[]): boolean {
+function isSequentialPhaseLine(phases: number[], maxPhases: number): boolean {
   let isIncreasing = true;
   let isDecreasing = true;
 
   for (let i = 0; i < phases.length - 1; i++) {
-    const diff = (phases[i + 1] - phases[i] + 10) % 10;
+    const diff = (phases[i + 1] - phases[i] + maxPhases) % maxPhases;
     if (diff !== 1) isIncreasing = false;
-    if (diff !== 9) isDecreasing = false;
+    if (diff !== maxPhases - 1) isDecreasing = false;
   }
 
   return isIncreasing || isDecreasing;
@@ -103,6 +104,7 @@ export function checkWin(
   const size = board.length;
   const len = settings.winLength;
   const streakLen = settings.streakWinLength;
+  const maxPhases = settings.maxPhases;
 
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
@@ -168,7 +170,7 @@ export function checkWin(
             });
           }
 
-          if (isSequentialPhaseLine(phases)) {
+          if (isSequentialPhaseLine(phases, maxPhases)) {
             lineWins.push({
               type: 'phase_seq',
               winner: firstPlayer,
@@ -196,14 +198,15 @@ export interface Threat {
   description: string;
 }
 
-function getNextPhaseForThreatCell(cell: CellState): number {
+function getNextPhaseForThreatCell(cell: CellState, maxPhases: number): number {
   const isFirstPlacement = cell.lastPlayer === null && cell.streak.white === 0 && cell.streak.black === 0;
-  return isFirstPlacement ? 0 : (cell.phase + 1) % 10;
+  return isFirstPlacement ? 0 : (cell.phase + 1) % maxPhases;
 }
 
 export function detectThreats(board: Board, settings: GameSettings): Threat[] {
   const size = board.length;
   const len = settings.winLength;
+  const maxPhases = settings.maxPhases;
   const threats: Threat[] = [];
   const seenThreats = new Set<string>();
 
@@ -256,11 +259,11 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             if (missingIndex === -1) continue;
 
             const phases = cells.map((cell, index) =>
-              index === missingIndex ? getNextPhaseForThreatCell(cell) : cell.phase,
+              index === missingIndex ? getNextPhaseForThreatCell(cell, maxPhases) : cell.phase,
             );
 
             const allSamePhase = phases.every(phase => phase === phases[0]);
-            const sequentialPhase = isSequentialPhaseLine(phases);
+            const sequentialPhase = isSequentialPhaseLine(phases, maxPhases);
             if (!allSamePhase && !sequentialPhase) continue;
 
             const threatType = allSamePhase ? 'phase_4' : 'xyz_4';

@@ -12,9 +12,10 @@ import {
 } from 'lucide-react';
 import type { Threat } from '../gameLogic';
 import { getPhaseLegendStyle } from '../phasePalette';
-import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
+import { normalizeGameSettings, type Board, type Coordinate, type GameMode, type GameSettings, type Player, type WinInfo } from '../types';
 import type { VisualTuning } from '../visualTuning';
 import { PanelCard } from './PanelCard';
+import { SessionSettingsForm } from './SessionSettingsForm';
 
 interface UIOverlayProps {
   board: Board;
@@ -337,36 +338,46 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
       <div className="my-2 grid min-h-0 flex-1 grid-cols-[minmax(12.5rem,14rem)_1fr_minmax(13rem,15rem)] gap-2">
         <div className="z-20 flex min-h-0 flex-col gap-2">
           <PanelCard title="対局設定" subtitle="モードと盤面サイズ" className={theme.panel} contentClassName="text-xs">
-            <div className="space-y-3 text-xs">
-              <label className="block">
-                <div className={`mb-1 text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>モード</div>
-                <select
-                  value={gameMode}
-                  onChange={(event) => setGameMode(event.target.value as GameMode)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none transition-colors focus:border-emerald-500"
-                >
-                  <option value="local">ローカル2P</option>
-                  <option value="ai_black">対AI: あなたは白</option>
-                  <option value="ai_white">対AI: あなたは黒</option>
-                </select>
-              </label>
-
-              <label className="block">
-                <div className={`mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>
-                  <span>盤面サイズ</span>
-                  <span className={theme.title}>{size} x {size} x {size}</span>
+            {debugMode ? (
+              <div className="space-y-3 text-xs">
+                <div className={`rounded-xl border px-3 py-2 ${theme.card} ${theme.subtitle}`}>
+                  デバッグ中のみ対局設定をリアルタイム変更できます。
                 </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="8"
-                  value={size}
-                  onChange={(event) => setSettings({ ...settings, boardSize: Number(event.target.value) })}
-                  className="w-full accent-emerald-500"
+                <SessionSettingsForm
+                  settings={settings}
+                  onSettingsChange={nextSettings => setSettings(normalizeGameSettings(nextSettings))}
+                  gameMode={gameMode}
+                  onGameModeChange={setGameMode}
+                  compact
                 />
-                <div className={`mt-1 text-[10px] ${theme.subtitle}`}>サイズ変更時は現在の対局をリセットします。</div>
-              </label>
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs">
+                <div className={`rounded-xl border px-3 py-2 ${theme.card}`}>
+                  <div className={`text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>モード</div>
+                  <div className={`mt-1 font-semibold ${theme.title}`}>
+                    {gameMode === 'local'
+                      ? 'ローカル2P'
+                      : gameMode === 'ai_black'
+                        ? '対AI: あなたは白'
+                        : '対AI: あなたは黒'}
+                  </div>
+                </div>
+                <div className={`rounded-xl border px-3 py-2 ${theme.card}`}>
+                  <div className={`text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>ルール</div>
+                  <div className={`mt-1 space-y-1 ${theme.title}`}>
+                    <div>{size} x {size} x {size}</div>
+                    <div>位相数 {settings.maxPhases} / XYZ {settings.winLength} 連 / 同位置 {settings.streakWinLength} 連</div>
+                    <div>Undo {settings.undoRedoEnabled ? '有効' : '無効'}</div>
+                    <div>持ち時間 {settings.timeLimitSeconds > 0 ? `${settings.timeLimitSeconds}秒` : '無制限'}</div>
+                    <div>引き分け {settings.drawMoveLimit > 0 ? `${settings.drawMoveLimit}手` : 'なし'}</div>
+                  </div>
+                </div>
+                <div className={`text-[10px] ${theme.subtitle}`}>
+                  通常時の対局条件変更はタイトル画面から行います。
+                </div>
+              </div>
+            )}
           </PanelCard>
 
           <PanelCard title="インスペクタ" subtitle="選択中マスの状態" className={theme.panel} contentClassName="text-xs">
@@ -531,7 +542,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
         <div className="w-full max-w-[11.5rem]">
           <PanelCard title="位相ガイド" subtitle="位相色の早見表" defaultCollapsed className={theme.panel} contentClassName="text-xs">
             <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-              {Array.from({ length: 10 }).map((_, phase) => {
+              {Array.from({ length: settings.maxPhases }).map((_, phase) => {
                 const whiteStyle = getPhaseLegendStyle(phase, 'white', visualTuning);
                 const blackStyle = getPhaseLegendStyle(phase, 'black', visualTuning);
                 return (

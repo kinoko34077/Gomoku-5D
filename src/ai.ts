@@ -44,7 +44,7 @@ export function computeBestMove(
         }
 
         // Simulate move to evaluate 5-in-a-row wins
-        const simulatedBoard = makeMove(board, x, y, z, aiPlayer);
+        const simulatedBoard = makeMove(board, x, y, z, aiPlayer, settings.maxPhases);
         const winInfo = checkWin(simulatedBoard, settings, aiPlayer);
 
         if (winInfo && winInfo.winner === aiPlayer) {
@@ -52,7 +52,7 @@ export function computeBestMove(
         }
 
         // Simulate opponent move to check if we need to block their 5-in-a-row win
-        const simulatedOpponentBoard = makeMove(board, x, y, z, humanPlayer);
+        const simulatedOpponentBoard = makeMove(board, x, y, z, humanPlayer, settings.maxPhases);
         const opponentWinInfo = checkWin(simulatedOpponentBoard, settings, humanPlayer);
 
         if (opponentWinInfo && opponentWinInfo.winner === humanPlayer) {
@@ -85,7 +85,11 @@ export function computeBestMove(
               const cz = startZ + i * dz;
               // If it's the target cell, use our simulated player's value
               if (cx === x && cy === y && cz === z) {
-                lineCells.push({ lastPlayer: aiPlayer, phase: (cell.phase + 1) % 10 });
+                const isFirstPlacement = cell.lastPlayer === null && cell.streak.white === 0 && cell.streak.black === 0;
+                lineCells.push({
+                  lastPlayer: aiPlayer,
+                  phase: isFirstPlacement ? 0 : (cell.phase + 1) % settings.maxPhases,
+                });
               } else {
                 lineCells.push(board[cx][cy][cz]);
               }
