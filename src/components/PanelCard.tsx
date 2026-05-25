@@ -1,44 +1,49 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { X } from 'lucide-react';
 
 interface PanelCardProps {
   title: string;
   subtitle?: string;
-  defaultCollapsed?: boolean;
   className?: string;
   contentClassName?: string;
-  children: React.ReactNode;
+  children: ReactNode;
+  onClose?: () => void;
+  headerTrailing?: ReactNode;
 }
 
 export function PanelCard({
   title,
   subtitle,
-  defaultCollapsed = false,
   className = '',
   contentClassName = '',
   children,
+  onClose,
+  headerTrailing,
 }: PanelCardProps) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
-
   return (
-    <section className={`pointer-events-auto rounded-2xl border border-slate-700/85 bg-slate-950/76 shadow-2xl backdrop-blur-md ${className}`}>
-      <button
-        type="button"
-        onClick={() => setCollapsed(prev => !prev)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
-      >
+    <section className={`pointer-events-auto overflow-hidden rounded-[1.6rem] border border-slate-700/80 bg-slate-950/94 shadow-2xl ${className}`}>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-800/90 px-4 py-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-200">
             {title}
           </div>
-          {subtitle ? <div className="mt-1 truncate text-[10px] text-slate-500">{subtitle}</div> : null}
+          {subtitle ? <div className="mt-1 text-[10px] text-slate-500">{subtitle}</div> : null}
         </div>
-        <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-900/80 p-1 text-slate-300">
-          {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        <div className="flex items-center gap-2">
+          {headerTrailing}
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-700 bg-slate-900/80 p-1.5 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+              title="閉じる"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
         </div>
-      </button>
-
-      {!collapsed ? <div className={`border-t border-slate-800/90 px-3 py-3 ${contentClassName}`}>{children}</div> : null}
+      </div>
+      <div className={`px-4 py-3 ${contentClassName}`}>{children}</div>
     </section>
   );
 }

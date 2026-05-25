@@ -143,7 +143,8 @@ export default function App() {
           onReset={handleReset}
           canUndo={canUndo}
           canRedo={canRedo}
-          onGuideOpen={() => setIsGuideOpen(true)}
+          isGuideOpen={isGuideOpen}
+          onGuideToggle={() => setIsGuideOpen(prev => !prev)}
           onCellClick={executeMove}
         />
       </div>
