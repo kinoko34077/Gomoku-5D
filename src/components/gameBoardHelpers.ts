@@ -4,6 +4,10 @@ import type { Board, Coordinate } from '../types';
 import type { VisualTuning } from '../visualTuning';
 
 const countTextureCache = new Map<string, THREE.CanvasTexture>();
+const rulerTextureCache = new Map<string, THREE.CanvasTexture>();
+const KANJI_NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五'] as const;
+
+export type GridDensityMode = 'detailed' | 'points';
 
 type BoardCell = Board[number][number][number];
 
@@ -82,6 +86,26 @@ export function get3DPosition(x: number, y: number, z: number, size: number, cel
   );
 }
 
+export function formatAxisIndexToXLabel(index: number) {
+  return String.fromCharCode(65 + index);
+}
+
+export function formatAxisIndexToYLabel(index: number) {
+  return String(index + 1);
+}
+
+export function formatAxisIndexToZLabel(index: number) {
+  return KANJI_NUMERALS[index] ?? String(index + 1);
+}
+
+export function formatDisplayCoordinate(coord: Coordinate) {
+  return `${formatAxisIndexToXLabel(coord[0])}${formatAxisIndexToYLabel(coord[1])}${formatAxisIndexToZLabel(coord[2])}`;
+}
+
+export function getGridDensityMode(boardSize: number): GridDensityMode {
+  return boardSize >= 10 ? 'points' : 'detailed';
+}
+
 export function isCoordInSlice(
   coord: Coordinate,
   axis: 'X' | 'Y' | 'Z' | 'none',
@@ -101,6 +125,9 @@ export function buildGridPointSets(
 ) {
   const outerPoints: number[] = [];
   const slicePoints: number[] = [];
+  const outerDotPositions: number[] = [];
+  const sliceDotPositions: number[] = [];
+  const densityMode = getGridDensityMode(boardSize);
 
   const pushSegment = (from: Coordinate, to: Coordinate) => {
     const p1 = get3DPosition(from[0], from[1], from[2], boardSize, cellSpacing);
@@ -114,31 +141,63 @@ export function buildGridPointSets(
     target.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
   };
 
-  for (let y = 0; y < boardSize; y++) {
-    for (let z = 0; z < boardSize; z++) {
-      for (let x = 0; x < boardSize - 1; x++) {
-        pushSegment([x, y, z], [x + 1, y, z]);
-      }
-    }
-  }
-
-  for (let x = 0; x < boardSize; x++) {
-    for (let z = 0; z < boardSize; z++) {
-      for (let y = 0; y < boardSize - 1; y++) {
-        pushSegment([x, y, z], [x, y + 1, z]);
-      }
-    }
-  }
-
-  for (let x = 0; x < boardSize; x++) {
+  if (densityMode === 'detailed') {
     for (let y = 0; y < boardSize; y++) {
-      for (let z = 0; z < boardSize - 1; z++) {
-        pushSegment([x, y, z], [x, y, z + 1]);
+      for (let z = 0; z < boardSize; z++) {
+        for (let x = 0; x < boardSize - 1; x++) {
+          pushSegment([x, y, z], [x + 1, y, z]);
+        }
+      }
+    }
+
+    for (let x = 0; x < boardSize; x++) {
+      for (let z = 0; z < boardSize; z++) {
+        for (let y = 0; y < boardSize - 1; y++) {
+          pushSegment([x, y, z], [x, y + 1, z]);
+        }
+      }
+    }
+
+    for (let x = 0; x < boardSize; x++) {
+      for (let y = 0; y < boardSize; y++) {
+        for (let z = 0; z < boardSize - 1; z++) {
+          pushSegment([x, y, z], [x, y, z + 1]);
+        }
+      }
+    }
+  } else {
+    const max = boardSize - 1;
+    const edgeSegments: Array<[Coordinate, Coordinate]> = [
+      [[0, 0, 0], [max, 0, 0]],
+      [[0, max, 0], [max, max, 0]],
+      [[0, 0, max], [max, 0, max]],
+      [[0, max, max], [max, max, max]],
+      [[0, 0, 0], [0, max, 0]],
+      [[max, 0, 0], [max, max, 0]],
+      [[0, 0, max], [0, max, max]],
+      [[max, 0, max], [max, max, max]],
+      [[0, 0, 0], [0, 0, max]],
+      [[max, 0, 0], [max, 0, max]],
+      [[0, max, 0], [0, max, max]],
+      [[max, max, 0], [max, max, max]],
+    ];
+    edgeSegments.forEach(([from, to]) => pushSegment(from, to));
+
+    for (let x = 0; x < boardSize; x++) {
+      for (let y = 0; y < boardSize; y++) {
+        for (let z = 0; z < boardSize; z++) {
+          const pos = get3DPosition(x, y, z, boardSize, cellSpacing);
+          const target =
+            sliceAxis !== 'none' && isCoordInSlice([x, y, z], sliceAxis, sliceIndex)
+              ? sliceDotPositions
+              : outerDotPositions;
+          target.push(pos.x, pos.y, pos.z);
+        }
       }
     }
   }
 
-  return { outerPoints, slicePoints };
+  return { outerPoints, slicePoints, outerDotPositions, sliceDotPositions, densityMode };
 }
 
 export function createSliceBoardPlane(
@@ -196,6 +255,27 @@ export function createGridLines(
   return lines;
 }
 
+export function createGridDots(
+  positions: number[],
+  color: number,
+  opacity: number,
+  size: number,
+) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  return new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({
+      color,
+      transparent: true,
+      opacity,
+      size,
+      sizeAttenuation: true,
+      depthWrite: false,
+    }),
+  );
+}
+
 function createCountTexture(count: number, color: string, outlineColor: string) {
   const cacheKey = `${count}:${color}:${outlineColor}`;
   const cached = countTextureCache.get(cacheKey);
@@ -228,6 +308,106 @@ function createCountTexture(count: number, color: string, outlineColor: string) 
   texture.magFilter = THREE.LinearFilter;
   countTextureCache.set(cacheKey, texture);
   return texture;
+}
+
+function getRulerLabel(axis: 'X' | 'Y' | 'Z', index: number) {
+  if (axis === 'X') {
+    return formatAxisIndexToXLabel(index);
+  }
+  if (axis === 'Y') {
+    return formatAxisIndexToYLabel(index);
+  }
+  return formatAxisIndexToZLabel(index);
+}
+
+function createRulerTexture(text: string, fillStyle: string, outlineStyle: string) {
+  const cacheKey = `${text}:${fillStyle}:${outlineStyle}`;
+  const cached = rulerTextureCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = '700 52px "Noto Sans JP", "Yu Gothic UI", sans-serif';
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = outlineStyle;
+  ctx.fillStyle = fillStyle;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  rulerTextureCache.set(cacheKey, texture);
+  return texture;
+}
+
+function createRulerSprite(text: string, color: string, outline: string, scale: number) {
+  const texture = createRulerTexture(text, color, outline);
+  if (!texture) return null;
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  );
+  sprite.scale.set(scale, scale, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
+export function createRulerLabels(boardSize: number, cellSpacing: number) {
+  const group = new THREE.Group();
+  const edgeOffset = ((boardSize - 1) / 2) * cellSpacing;
+  const margin = cellSpacing * 1.1;
+  const scale = cellSpacing * 0.82;
+
+  for (let index = 0; index < boardSize; index++) {
+    const xLabel = createRulerSprite(getRulerLabel('X', index), '#93c5fd', '#0f172a', scale);
+    if (xLabel) {
+      xLabel.position.set(
+        (index - (boardSize - 1) / 2) * cellSpacing,
+        -edgeOffset - margin,
+        -edgeOffset - margin * 0.65,
+      );
+      group.add(xLabel);
+    }
+
+    const yLabel = createRulerSprite(getRulerLabel('Y', index), '#f8fafc', '#0f172a', scale);
+    if (yLabel) {
+      yLabel.position.set(
+        -edgeOffset - margin,
+        (index - (boardSize - 1) / 2) * cellSpacing,
+        -edgeOffset - margin * 0.65,
+      );
+      group.add(yLabel);
+    }
+
+    const zLabel = createRulerSprite(getRulerLabel('Z', index), '#fcd34d', '#0f172a', scale);
+    if (zLabel) {
+      zLabel.position.set(
+        edgeOffset + margin,
+        -edgeOffset - margin * 0.65,
+        (index - (boardSize - 1) / 2) * cellSpacing,
+      );
+      group.add(zLabel);
+    }
+  }
+
+  return group;
 }
 
 function createCountMarkers(count: number, color: string, outlineColor: string, inSlice: boolean, tuning: VisualTuning) {

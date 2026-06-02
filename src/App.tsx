@@ -6,7 +6,7 @@ import { StartScreen } from './components/StartScreen';
 import { UIOverlay } from './components/UIOverlay';
 import { useDebugModeToggle } from './hooks/useDebugModeToggle';
 import { useFiveDGomoku } from './hooks/useFiveDGomoku';
-import type { GameMode, GameSettings } from './types';
+import type { Coordinate, FooterInfoMode, GameMode, GameSettings } from './types';
 import { defaultVisualTuning, type VisualTuning } from './visualTuning';
 
 function AiThinkingBanner() {
@@ -17,7 +17,7 @@ function AiThinkingBanner() {
         <div className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '150ms' }} />
         <div className="h-2 w-2 animate-bounce rounded-full bg-purple-400" style={{ animationDelay: '300ms' }} />
       </div>
-      <span className="font-sans text-xs font-semibold tracking-wide text-purple-300">AI が思考中...</span>
+      <span className="font-sans text-xs font-semibold tracking-wide text-purple-300">AI が思考中です</span>
     </div>
   );
 }
@@ -31,8 +31,8 @@ function PerformanceWarning({
 }) {
   return (
     <div className="absolute bottom-4 left-4 z-40 rounded-2xl border border-red-500/30 bg-red-950/82 px-3 py-2 text-xs text-red-100 shadow-xl backdrop-blur-md">
-      <div className="font-semibold">性能警告</div>
-      <div>警戒計算: {threatCalcMs.toFixed(1)} ms</div>
+      <div className="font-semibold">描画負荷が高めです</div>
+      <div>脅威計算: {threatCalcMs.toFixed(1)} ms</div>
       <div>最大フレーム: {worstFrameMs.toFixed(1)} ms</div>
     </div>
   );
@@ -43,6 +43,9 @@ export default function App() {
   const [hasStartedSession, setHasStartedSession] = useState(false);
   const [visualTuning, setVisualTuning] = useState<VisualTuning>(defaultVisualTuning);
   const [showHistoryControls, setShowHistoryControls] = useState(true);
+  const [showRuler, setShowRuler] = useState(false);
+  const [footerInfoMode, setFooterInfoMode] = useState<FooterInfoMode>('always');
+  const [hoveredCoord, setHoveredCoord] = useState<Coordinate | null>(null);
   const { debugMode, setDebugMode } = useDebugModeToggle();
   const {
     settings,
@@ -64,26 +67,39 @@ export default function App() {
     setSliceIndex,
     showGridAssist,
     setShowGridAssist,
-    threatDetectionEnabled,
-    setThreatDetectionEnabled,
-    threatDisplayEnabled,
-    setThreatDisplayEnabled,
+    threatsEnabled,
+    setThreatsEnabled,
     syncSlice,
     executeMove,
     handleUndo,
     handleRedo,
     handleReset,
+    moveCount,
+    playerClockMs,
     canUndo,
     canRedo,
   } = useFiveDGomoku();
 
-  const visibleThreats = threatDisplayEnabled ? threats : [];
+  const visibleThreats = threatsEnabled ? threats : [];
 
   const handleStartSession = (nextSettings: GameSettings, nextMode: GameMode) => {
     applySessionConfig(nextSettings, nextMode);
     setGameMode(nextMode);
     setHasStartedSession(true);
     setShowHistoryControls(nextSettings.undoRedoEnabled);
+    setHoveredCoord(null);
+  };
+
+  const handleResetSession = () => {
+    handleReset();
+    setHoveredCoord(null);
+  };
+
+  const handleReturnToTitle = () => {
+    handleResetSession();
+    setHoveredCoord(null);
+    setIsGuideOpen(false);
+    setHasStartedSession(false);
   };
 
   return (
@@ -101,6 +117,7 @@ export default function App() {
           settings={settings}
           cursor={cursor}
           onCursorChange={syncCursor}
+          onHoverCoordChange={setHoveredCoord}
           onSliceChange={syncSlice}
           onCellClick={executeMove}
           sliceAxis={sliceAxis}
@@ -108,6 +125,7 @@ export default function App() {
           winInfo={winInfo}
           threats={visibleThreats}
           showGridAssist={showGridAssist}
+          showRuler={showRuler}
           visualTuning={visualTuning}
           showDiagnostics={debugMode}
         />
@@ -120,6 +138,7 @@ export default function App() {
           setGameMode={setGameMode}
           activePlayer={activePlayer}
           cursor={cursor}
+          hoveredCoord={hoveredCoord}
           onCursorChange={syncCursor}
           sliceAxis={sliceAxis}
           setSliceAxis={setSliceAxis}
@@ -130,21 +149,27 @@ export default function App() {
           visualTuning={visualTuning}
           showGridAssist={showGridAssist}
           setShowGridAssist={setShowGridAssist}
-          threatDetectionEnabled={threatDetectionEnabled}
-          setThreatDetectionEnabled={setThreatDetectionEnabled}
-          threatDisplayEnabled={threatDisplayEnabled}
-          setThreatDisplayEnabled={setThreatDisplayEnabled}
+          threatsEnabled={threatsEnabled}
+          setThreatsEnabled={setThreatsEnabled}
+          showRuler={showRuler}
+          setShowRuler={setShowRuler}
+          footerInfoMode={footerInfoMode}
+          setFooterInfoMode={setFooterInfoMode}
           debugMode={debugMode}
           setDebugMode={setDebugMode}
           showHistoryControls={showHistoryControls}
           setShowHistoryControls={setShowHistoryControls}
           onUndo={handleUndo}
           onRedo={handleRedo}
-          onReset={handleReset}
+          onReset={handleResetSession}
           canUndo={canUndo}
           canRedo={canRedo}
+          moveCount={moveCount}
+          playerClockMs={playerClockMs}
           isGuideOpen={isGuideOpen}
           onGuideToggle={() => setIsGuideOpen(prev => !prev)}
+          onReturnToTitle={handleReturnToTitle}
+          onRematch={handleResetSession}
           onCellClick={executeMove}
         />
       </div>

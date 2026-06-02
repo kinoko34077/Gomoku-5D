@@ -7,35 +7,35 @@ interface GameControlsGuideProps {
 }
 
 const playSteps = [
-  '断面を見ながら、狙いたい座標を探します。',
-  '必要に応じて X / Y / Z の断面を切り替え、立体位置を把握します。',
-  '同じマスに重ねて置くと、位相と同位置コンボが進みます。',
-  'インスペクタで現在マスの位相とコンボ数を確認できます。',
-  '警戒表示を有効にすると、あと1手で危険な筋を確認できます。',
+  '盤面を見ながら、置きたい座標にカーソルを合わせます。',
+  '必要なら X / Y / Z のスライス表示を切り替えて、奥行き方向の位置を確認します。',
+  '同じマスに重ねて置くと、そのマスの位相と streak が進みます。',
+  'インスペクタでは現在マスの位相、最後に置いた色、streak を確認できます。',
+  '脅威表示を有効にすると、次の一手で危険な位置を一覧できます。',
 ];
 
 const keyboardRows = [
   ['XY 移動', 'W / A / S / D'],
   ['Z 移動', 'Q / E'],
-  ['石を置く', 'Space / Enter'],
-  ['グリッド切替', 'G'],
-  ['デバッグ切替', 'P + DEBUG'],
+  ['現在マスに置く', 'Space / Enter'],
+  ['グリッド補助', 'G'],
+  ['ガイド開閉', 'H'],
+  ['パネル切替', 'M / I / C / L / V / O'],
 ];
 
 const mouseRows = [
-  '通常ドラッグ: 回転',
-  'Shift + ホバー / クリック: X 軸固定',
-  'Ctrl + ホバー / クリック: Z 軸固定',
-  'Shift + Ctrl: XZ 軸固定',
-  'Alt + ドラッグ: 上下で Y、左右で Z 断面変更',
+  '左ドラッグ: 視点回転',
   'ホイール: ズーム',
-  'Shift / Alt / Ctrl + ホイール: X / Y / Z の指定位置変更',
+  'Shift + ホイール: X 軸スライス移動',
+  'Alt + ホイール: Y 軸スライス移動',
+  'Ctrl + ホイール: Z 軸スライス移動',
+  'クリック: マス選択',
 ];
 
 const touchRows = [
-  '1本指: 回転',
-  '2本指スワイプ: 断面移動',
-  '2本指ひねり: カメラのひねり回転',
+  '1本指: 視点回転',
+  '2本指スワイプ: 盤面移動',
+  'ピンチ: ズーム',
 ];
 
 function GuideSection({
@@ -84,21 +84,21 @@ export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, on
           <div className="space-y-5">
             <GuideSection title="ゲーム概要" icon={<BookOpen size={16} />} accentClass="text-emerald-400">
               <div className="space-y-2 text-sm leading-7 text-slate-200">
-                <p>このゲームは 3D 空間の盤面に石を置いていく五次元五目です。</p>
-                <p>各マスには位相があり、同じ場所に重ねて置くと位相と同位置コンボが進みます。</p>
-                <p>断面表示を切り替えることで、X / Y / Z ごとの層を見ながら立体的に読み合えます。</p>
+                <p>このゲームは 3D 盤面の各マスに石を重ねて置いていく五目並べです。</p>
+                <p>各マスには位相があり、連続して置くと位相と streak が進みます。</p>
+                <p>スライス表示を切り替えることで、X / Y / Z ごとの断面を見ながら考えられます。</p>
               </div>
             </GuideSection>
 
             <GuideSection title="勝利条件" icon={<Trophy size={16} />} accentClass="text-amber-400">
               <div className="space-y-3 text-sm leading-7 text-slate-200">
-                <p>1. 同じ場所に 5 回重ねて置き、同位置 5 コンボを作る。</p>
-                <p>2. XYZ 空間上で 5 連を作り、その 5 マスの位相がそろうか、階段状につながる。</p>
-                <p>つまり、空間 5 連だけでは勝ちになりません。</p>
+                <p>1. 同じマスに 5 回連続で置いて streak 5 を作る。</p>
+                <p>2. XYZ の一直線上で 5 連を作り、その 5 マスの位相が同じか連番になる。</p>
+                <p>どちらかを満たした時点で勝利です。</p>
               </div>
             </GuideSection>
 
-            <GuideSection title="遊び方の流れ" accentClass="text-sky-400">
+            <GuideSection title="基本の流れ" accentClass="text-sky-400">
               <div className="space-y-2 text-sm leading-7 text-slate-200">
                 {playSteps.map(step => (
                   <p key={step}>・{step}</p>

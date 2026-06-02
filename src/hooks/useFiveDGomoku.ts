@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { computeBestMove } from '../ai';
 import { checkWin, makeMove, type Threat } from '../gameLogic';
-import { DEFAULT_GAME_SETTINGS, type Board, type Coordinate, type GameMode, type GameSettings, type Player, type WinInfo } from '../types';
+import { DEFAULT_GAME_SETTINGS, type Board, type Coordinate, type GameMode, type GameSettings, type Player, type PlayerClock, type WinInfo } from '../types';
 import {
   clampIndex,
+  cloneRemainingTime,
   createHistoryEntry,
+  createInitialRemainingTime,
   createInitialGameSnapshot,
+  getDisplayedRemainingTime,
   getCenteredCursor,
   getRedoTargetIndex,
   getSliceIndexForAxis,
@@ -25,7 +28,7 @@ export function useFiveDGomoku() {
   const [settings, setSettings] = useState<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
   const [gameMode, setGameMode] = useState<GameMode>('local');
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [board, setBoard] = useState<Board>(() => createInitialGameSnapshot(settings.boardSize).board);
+  const [board, setBoard] = useState<Board>(() => createInitialGameSnapshot(DEFAULT_GAME_SETTINGS).board);
   const [activePlayer, setActivePlayer] = useState<Player>('white');
   const [cursor, setCursor] = useState<Coordinate>(() => getCenteredCursor(settings.boardSize));
   const [winInfo, setWinInfo] = useState<WinInfo | null>(null);
@@ -38,10 +41,12 @@ export function useFiveDGomoku() {
   const [sliceAxis, setSliceAxis] = useState<'X' | 'Y' | 'Z' | 'none'>('Z');
   const [sliceIndex, setSliceIndex] = useState(() => Math.floor(settings.boardSize / 2));
   const [showGridAssist, setShowGridAssist] = useState(true);
-  const [threatDetectionEnabled, setThreatDetectionEnabled] = useState(true);
-  const [threatDisplayEnabled, setThreatDisplayEnabled] = useState(true);
-  const [history, setHistory] = useState<HistoryEntry[]>(() => createInitialGameSnapshot(settings.boardSize).history);
+  const [threatsEnabled, setThreatsEnabled] = useState(true);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => createInitialGameSnapshot(DEFAULT_GAME_SETTINGS).history);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [remainingTime, setRemainingTime] = useState<PlayerClock>(() => createInitialRemainingTime(DEFAULT_GAME_SETTINGS));
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  const turnStartedAtRef = useRef<number | null>(null);
 
   const stateRef = useRef<GameStateRef>({
     board,
@@ -55,6 +60,7 @@ export function useFiveDGomoku() {
     isAiThinking,
     history,
     historyIndex,
+    remainingTime,
   });
 
   useEffect(() => {
@@ -70,8 +76,9 @@ export function useFiveDGomoku() {
       isAiThinking,
       history,
       historyIndex,
+      remainingTime,
     };
-  }, [board, settings, activePlayer, cursor, winInfo, sliceAxis, sliceIndex, gameMode, isAiThinking, history, historyIndex]);
+  }, [board, settings, activePlayer, cursor, winInfo, sliceAxis, sliceIndex, gameMode, isAiThinking, history, historyIndex, remainingTime]);
 
   const syncCursor = useCallback((nextCursor: Coordinate) => {
     setCursor(nextCursor);
@@ -86,8 +93,12 @@ export function useFiveDGomoku() {
     setSliceIndex(clampIndex(index, stateRef.current.settings.boardSize));
   }, []);
 
-  const resetGameState = useCallback((size: number) => {
-    const initialState = createInitialGameSnapshot(size);
+  const resetGameState = useCallback((size: number, nextSettings?: GameSettings) => {
+    const resolvedSettings = nextSettings ?? {
+      ...stateRef.current.settings,
+      boardSize: size,
+    };
+    const initialState = createInitialGameSnapshot(resolvedSettings);
     const freshBoard = initialState.board;
     const initialCursor = initialState.cursor;
 
@@ -101,32 +112,93 @@ export function useFiveDGomoku() {
     setIsAiThinking(false);
     setHistory(initialState.history);
     setHistoryIndex(0);
+    setRemainingTime(initialState.remainingTime);
+    turnStartedAtRef.current = resolvedSettings.timeLimitSeconds > 0 ? Date.now() : null;
+    setClockNow(Date.now());
   }, []);
 
   useEffect(() => {
     resetGameState(settings.boardSize);
   }, [settings.boardSize, resetGameState]);
 
+  useEffect(() => {
+    if (settings.timeLimitSeconds <= 0 || winInfo) {
+      turnStartedAtRef.current = null;
+      return;
+    }
+
+    turnStartedAtRef.current = Date.now();
+    setClockNow(Date.now());
+
+    const timer = window.setInterval(() => {
+      const snapshot = getDisplayedRemainingTime(
+        stateRef.current.remainingTime,
+        stateRef.current.activePlayer,
+        turnStartedAtRef.current,
+        Date.now(),
+      );
+      const activeClock = snapshot[stateRef.current.activePlayer];
+
+      if (activeClock !== null && activeClock <= 0) {
+        const timeoutWinner: Player = stateRef.current.activePlayer === 'white' ? 'black' : 'white';
+        setRemainingTime(snapshot);
+        setWinInfo({
+          type: 'timeout',
+          winner: timeoutWinner,
+          cells: [],
+          description: `${stateRef.current.activePlayer === 'white' ? '白' : '黒'}の持ち時間がなくなりました。${timeoutWinner === 'white' ? '白' : '黒'}の時間切れ勝ちです。`,
+        });
+        turnStartedAtRef.current = null;
+      }
+
+      setClockNow(Date.now());
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [activePlayer, settings.timeLimitSeconds, winInfo]);
+
   useThreatDetector({
     board,
     settings,
     activePlayer,
     winInfo,
-    threatDetectionEnabled,
+    threatsEnabled,
     setThreats,
     setPerformanceState,
   });
 
   useFrameLagMonitor(setPerformanceState);
 
+  const commitActiveClock = useCallback((player: Player) => {
+    const snapshot = getDisplayedRemainingTime(
+      stateRef.current.remainingTime,
+      player,
+      turnStartedAtRef.current,
+      Date.now(),
+    );
+    setRemainingTime(snapshot);
+    return snapshot;
+  }, []);
+
   const executeMove = useCallback((x: number, y: number, z: number, options?: { bypassThinkingGuard?: boolean }) => {
     const { board: currentBoard, activePlayer: player, winInfo: currentWin, isAiThinking: thinking, history: currentHistory, historyIndex: currentHistoryIndex } = stateRef.current;
 
     if (currentWin || (thinking && !options?.bypassThinkingGuard)) return;
 
+    const nextRemainingTime = commitActiveClock(player);
     const nextBoard = makeMove(currentBoard, x, y, z, player, settings.maxPhases);
-    const nextWin = checkWin(nextBoard, settings, player);
+    const moveNumber = currentHistoryIndex + 1;
+    let nextWin = checkWin(nextBoard, settings, player);
     const nextPlayer: Player = player === 'white' ? 'black' : 'white';
+
+    if (!nextWin && settings.drawMoveLimit > 0 && moveNumber >= settings.drawMoveLimit) {
+      nextWin = {
+        type: 'draw',
+        winner: null,
+        cells: [],
+        description: `${moveNumber} 手に達したため引き分けです。`,
+      };
+    }
 
     setBoard(nextBoard);
     setWinInfo(nextWin);
@@ -134,13 +206,19 @@ export function useFiveDGomoku() {
       setActivePlayer(nextPlayer);
     }
 
-    const newEntry = createHistoryEntry(nextBoard, nextPlayer, [x, y, z], nextWin);
+    const newEntry = createHistoryEntry(
+      nextBoard,
+      nextWin ? player : nextPlayer,
+      [x, y, z],
+      nextWin,
+      cloneRemainingTime(nextRemainingTime),
+    );
 
     const newHistory = currentHistory.slice(0, currentHistoryIndex + 1).concat(newEntry);
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
     syncCursor([x, y, z]);
-  }, [settings, syncCursor]);
+  }, [commitActiveClock, settings, syncCursor]);
 
   useEffect(() => {
     const { gameMode: currentMode, activePlayer: player, winInfo: currentWin } = stateRef.current;
@@ -177,6 +255,9 @@ export function useFiveDGomoku() {
     syncCursor(state.cursor);
     setWinInfo(state.winInfo);
     setHistoryIndex(targetIndex);
+    setRemainingTime(cloneRemainingTime(state.remainingTime));
+    turnStartedAtRef.current = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? Date.now() : null;
+    setClockNow(Date.now());
   }, [syncCursor]);
 
   const handleRedo = useCallback(() => {
@@ -192,16 +273,19 @@ export function useFiveDGomoku() {
     syncCursor(state.cursor);
     setWinInfo(state.winInfo);
     setHistoryIndex(targetIndex);
+    setRemainingTime(cloneRemainingTime(state.remainingTime));
+    turnStartedAtRef.current = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? Date.now() : null;
+    setClockNow(Date.now());
   }, [syncCursor]);
 
   const handleReset = useCallback(() => {
-    resetGameState(settings.boardSize);
+    resetGameState(settings.boardSize, settings);
   }, [resetGameState, settings.boardSize]);
 
   const applySessionConfig = useCallback((nextSettings: GameSettings, nextGameMode: GameMode) => {
     setSettings(nextSettings);
     setGameMode(nextGameMode);
-    resetGameState(nextSettings.boardSize);
+    resetGameState(nextSettings.boardSize, nextSettings);
   }, [resetGameState]);
 
   const moveCursor = useCallback((dx: number, dy: number, dz: number) => {
@@ -287,6 +371,13 @@ export function useFiveDGomoku() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [executeMove, handleRedo, handleUndo, moveCursor]);
 
+  const playerClockMs = getDisplayedRemainingTime(
+    remainingTime,
+    activePlayer,
+    turnStartedAtRef.current,
+    clockNow,
+  );
+
   return {
     settings,
     setSettings,
@@ -307,16 +398,15 @@ export function useFiveDGomoku() {
     setSliceIndex,
     showGridAssist,
     setShowGridAssist,
-    threatDetectionEnabled,
-    setThreatDetectionEnabled,
-    threatDisplayEnabled,
-    setThreatDisplayEnabled,
+    threatsEnabled,
+    setThreatsEnabled,
     syncSlice,
     executeMove,
     handleUndo,
     handleRedo,
     handleReset,
     moveCount: historyIndex,
+    playerClockMs,
     canUndo: settings.undoRedoEnabled && historyIndex > 0,
     canRedo: settings.undoRedoEnabled && historyIndex < history.length - 1,
   };

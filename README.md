@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# 5次元五目並べ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+3D 盤面、位相循環、同位置コンボを組み合わせた五目並べプロトタイプです。  
+現時点ではローカル対戦と対 AI を中心に実装しており、オンライン対戦は仕様と型の整備まで進んでいます。
 
-Currently, two official plugins are available:
+## 現状
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 盤面ルール
+  - XYZ の直線 5 連
+  - 同位相 5 連
+  - 位相階段 5 連
+  - 同位置コンボ勝利
+- 対局機能
+  - ローカル 2P
+  - 対 AI
+  - Undo / Redo
+  - 持ち時間
+  - 引き分け手数
+- 表示
+  - Three.js による 3D 盤面
+  - スライス表示
+  - 脅威表示
+  - デバッグ表示
 
-## React Compiler
+## 未実装
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- オンライン通信本体
+- 部屋作成 / 参加 / 再接続
+- rematch
+- オンライン時の Undo 同意フロー
 
-## Expanding the ESLint configuration
+オンライン対戦の要件は [docs/specs/09_online_multiplayer.md](/C:/Users/kinok/PRG/5次元五目並べ/docs/specs/09_online_multiplayer.md) にあります。
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 起動
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## テスト
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm test
+npx tsc -b --pretty false
+npm run build
 ```
+
+## ロードマップ
+
+1. UI 文言と文字化けの完全解消
+   - 開始画面、オーバーレイ、ガイド、README を日本語で揃える
+2. ローカル対戦の完成度向上
+   - 持ち時間切れと引き分け時の演出整理
+   - 勝敗説明の明確化
+3. 状態管理テストの拡張
+   - 時計
+   - 引き分け
+   - Undo / Redo 時の復元
+4. 仕様同期
+   - `PROTOTYPE.md`
+   - オンライン仕様書
+   - README
+5. オンライン対戦の最小実装
+   - 部屋作成
+   - 参加
+   - 着手同期
+   - 再接続

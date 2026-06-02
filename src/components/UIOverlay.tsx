@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BookOpenText,
-  Cpu,
   Eye,
   Gauge,
   HelpCircle,
@@ -13,13 +12,28 @@ import {
   Settings2,
   ShieldAlert,
   Undo2,
-  User,
   X,
 } from 'lucide-react';
 import type { Threat } from '../gameLogic';
 import { getPhaseLegendStyle } from '../phasePalette';
-import { normalizeGameSettings, type Board, type Coordinate, type GameMode, type GameSettings, type Player, type WinInfo } from '../types';
+import {
+  normalizeGameSettings,
+  type Board,
+  type Coordinate,
+  type FooterInfoMode,
+  type GameMode,
+  type GameSettings,
+  type Player,
+  type PlayerClock,
+  type WinInfo,
+} from '../types';
 import type { VisualTuning } from '../visualTuning';
+import {
+  formatAxisIndexToXLabel,
+  formatAxisIndexToYLabel,
+  formatAxisIndexToZLabel,
+  formatDisplayCoordinate,
+} from './gameBoardHelpers';
 import { PanelCard } from './PanelCard';
 import { SessionSettingsForm } from './SessionSettingsForm';
 
@@ -31,6 +45,7 @@ interface UIOverlayProps {
   setGameMode: (mode: GameMode) => void;
   activePlayer: Player;
   cursor: Coordinate;
+  hoveredCoord: Coordinate | null;
   onCursorChange: (cursor: Coordinate) => void;
   sliceAxis: 'X' | 'Y' | 'Z' | 'none';
   setSliceAxis: (axis: 'X' | 'Y' | 'Z' | 'none') => void;
@@ -41,10 +56,12 @@ interface UIOverlayProps {
   visualTuning: VisualTuning;
   showGridAssist: boolean;
   setShowGridAssist: (value: boolean | ((prev: boolean) => boolean)) => void;
-  threatDetectionEnabled: boolean;
-  setThreatDetectionEnabled: (value: boolean | ((prev: boolean) => boolean)) => void;
-  threatDisplayEnabled: boolean;
-  setThreatDisplayEnabled: (value: boolean | ((prev: boolean) => boolean)) => void;
+  threatsEnabled: boolean;
+  setThreatsEnabled: (value: boolean | ((prev: boolean) => boolean)) => void;
+  showRuler: boolean;
+  setShowRuler: (value: boolean | ((prev: boolean) => boolean)) => void;
+  footerInfoMode: FooterInfoMode;
+  setFooterInfoMode: (value: FooterInfoMode) => void;
   debugMode: boolean;
   setDebugMode: (value: boolean | ((prev: boolean) => boolean)) => void;
   showHistoryControls: boolean;
@@ -52,30 +69,34 @@ interface UIOverlayProps {
   onUndo: () => void;
   onRedo: () => void;
   onReset: () => void;
+  onRematch: () => void;
+  onReturnToTitle: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  moveCount: number;
+  playerClockMs: PlayerClock;
   isGuideOpen: boolean;
   onGuideToggle: () => void;
   onCellClick: (x: number, y: number, z: number) => void;
 }
 
-type LeftPanelId = 'session' | 'inspector' | 'colors';
+type LeftPanelId = 'display' | 'inspector' | 'colors';
 type RightPanelId = 'slice' | 'threats' | 'controls';
 type PanelState = Record<LeftPanelId | RightPanelId, boolean>;
 
 const controlRows = [
-  ['通常ドラッグ', '回転'],
-  ['Shift + ホバー / クリック', 'X 軸固定'],
-  ['Ctrl + ホバー / クリック', 'Z 軸固定'],
-  ['Shift + Ctrl', 'XZ 軸固定'],
-  ['Alt + ドラッグ', '上下で Y、左右で Z 断面変更'],
-  ['ホイール', 'ズーム'],
-  ['Shift / Alt / Ctrl + ホイール', 'X / Y / Z の指定位置変更'],
-  ['G', 'グリッド補助切替'],
+  ['矢印 / WASD', 'カーソル移動'],
+  ['Q / E', 'Z 軸へ移動'],
+  ['Enter / Space', '現在マスに置く'],
+  ['Ctrl+Z / Ctrl+Y', 'Undo / Redo'],
+  ['G', 'グリッド補助の表示切替'],
+  ['H', 'ガイドの開閉'],
+  ['M / I / C', '左パネル切替'],
+  ['L / V / O', '右パネル切替'],
 ] as const;
 
 const INITIAL_PANEL_STATE: PanelState = {
-  session: true,
+  display: false,
   inspector: false,
   colors: false,
   slice: true,
@@ -83,14 +104,30 @@ const INITIAL_PANEL_STATE: PanelState = {
   controls: false,
 };
 
-function compactThreatText(description: string) {
-  return description
-    .replace(/白が1手で/g, '白1手')
-    .replace(/黒が1手で/g, '黒1手')
-    .replace(/同位置コンボ警戒/g, '同位置警戒')
-    .replace(/XYZ \+ /g, '')
-    .replace(/階段位相5連/g, '階段5連')
-    .replace(/同位相5連/g, '同位相5連');
+function formatClock(ms: number | null) {
+  if (ms === null) return '時間制なし';
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function getModeLabel(gameMode: GameMode) {
+  if (gameMode === 'local') return 'ローカル 2P';
+  if (gameMode === 'ai_black') return '対 AI: あなたが白';
+  return '対 AI: あなたが黒';
+}
+
+function getThreatLabel(threat: Threat) {
+  if (threat.type === 'streak_pressure') return 'streak 警戒';
+  if (threat.type === 'phase_4') return '同位相 4 連';
+  return '連番 4 連';
+}
+
+function formatSliceIndexLabel(axis: 'X' | 'Y' | 'Z', index: number) {
+  if (axis === 'X') return formatAxisIndexToXLabel(index);
+  if (axis === 'Y') return formatAxisIndexToYLabel(index);
+  return formatAxisIndexToZLabel(index);
 }
 
 function HotkeyHint({ keyLabel }: { keyLabel: string }) {
@@ -101,25 +138,155 @@ function HotkeyHint({ keyLabel }: { keyLabel: string }) {
   );
 }
 
-function WinOverlay({
-  winInfo,
-  visible,
-  onClose,
-  onReset,
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+  disabled = false,
 }: {
-  winInfo: WinInfo;
-  visible: boolean;
-  onClose: () => void;
-  onReset: () => void;
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
 }) {
-  if (!visible) return null;
+  return (
+    <label className={`flex items-center justify-between gap-3 rounded-xl border border-slate-800/90 px-3 py-2 ${disabled ? 'opacity-50' : ''}`}>
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} />
+    </label>
+  );
+}
+
+function FooterModePicker({
+  value,
+  onChange,
+}: {
+  value: FooterInfoMode;
+  onChange: (next: FooterInfoMode) => void;
+}) {
+  const options: Array<{ value: FooterInfoMode; label: string }> = [
+    { value: 'always', label: '常時' },
+    { value: 'hover', label: 'ホバー時' },
+    { value: 'hidden', label: '非表示' },
+  ];
 
   return (
-    <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 backdrop-blur-sm">
-      <div className="w-full max-w-md space-y-4 rounded-3xl border border-slate-700 bg-slate-950/94 p-6 text-center shadow-2xl">
+    <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
+      {options.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${
+            value === option.value ? 'bg-emerald-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SummaryClock({
+  label,
+  active,
+  value,
+}: {
+  label: string;
+  active: boolean;
+  value: string;
+}) {
+  return (
+    <div className={`rounded-2xl border px-3 py-2 ${active ? 'border-emerald-400/35 bg-emerald-500/10' : 'border-slate-800 bg-slate-950/55'}`}>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{label}</div>
+      <div className={`mt-1 text-lg font-bold ${active ? 'text-emerald-300' : 'text-slate-100'}`}>{value}</div>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-[95] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-950/96 p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{body}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+            title="閉じる"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-rose-400"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WinOverlay({
+  winInfo,
+  onClose,
+  onRematch,
+  onReturnToTitle,
+}: {
+  winInfo: WinInfo;
+  onClose: () => void;
+  onRematch: () => void;
+  onReturnToTitle: () => void;
+}) {
+  const title = winInfo.type === 'draw'
+    ? '引き分け'
+    : winInfo.winner === 'white'
+      ? '白の勝ち'
+      : '黒の勝ち';
+  const subtitle = winInfo.type === 'streak'
+    ? 'streak 勝利'
+    : winInfo.type === 'timeout'
+      ? '時間切れ'
+      : winInfo.type === 'draw'
+        ? '手数上限に到達'
+        : 'XYZ + 位相勝利';
+
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-950/96 p-6 text-center shadow-2xl">
         <div className="flex items-start justify-between">
           <div />
           <button
+            type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
             title="閉じる"
@@ -127,27 +294,32 @@ function WinOverlay({
             <X size={18} />
           </button>
         </div>
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-2xl font-bold text-slate-950">
-          勝
+
+        <div className="mx-auto mt-1 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-3xl font-black text-slate-950">
+          {winInfo.type === 'draw' ? '=' : 'W'}
         </div>
-        <div>
-          <h2 className="text-xl font-extrabold tracking-wide text-yellow-300">
-            {winInfo.winner === 'white' ? '白の勝ち' : '黒の勝ち'}
-          </h2>
-          <div className="mt-1 text-[11px] tracking-[0.18em] text-slate-500">
-            {winInfo.type === 'streak' ? '同位置5コンボ' : 'XYZ5連 + 位相条件'}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/72 p-3 text-sm leading-relaxed text-slate-200">
+        <h2 className="mt-4 text-2xl font-black tracking-wide text-yellow-300">{title}</h2>
+        <div className="mt-1 text-[11px] tracking-[0.2em] text-slate-500">{subtitle}</div>
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/72 p-4 text-sm leading-7 text-slate-200">
           {winInfo.description}
         </div>
-        <div className="text-[11px] text-slate-500">数秒後に自動で閉じます。閉じても勝敗は維持され、追加の着手はできません。</div>
-        <button
-          onClick={onReset}
-          className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-500 py-3 font-extrabold text-slate-950 transition-transform active:scale-[0.98]"
-        >
-          もう一度遊ぶ
-        </button>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onReturnToTitle}
+            className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800"
+          >
+            タイトルに戻る
+          </button>
+          <button
+            type="button"
+            onClick={onRematch}
+            className="rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-4 py-3 text-sm font-black text-slate-950 transition-transform active:scale-[0.98]"
+          >
+            再戦
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -189,7 +361,7 @@ function isEditableTarget(target: EventTarget | null) {
   return tag === 'input' || tag === 'select' || tag === 'textarea' || element.isContentEditable;
 }
 
-export const UIOverlay: React.FC<UIOverlayProps> = ({
+export function UIOverlay({
   board,
   settings,
   setSettings,
@@ -197,6 +369,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   setGameMode,
   activePlayer,
   cursor,
+  hoveredCoord,
   onCursorChange,
   sliceAxis,
   setSliceAxis,
@@ -207,10 +380,12 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   visualTuning,
   showGridAssist,
   setShowGridAssist,
-  threatDetectionEnabled,
-  setThreatDetectionEnabled,
-  threatDisplayEnabled,
-  setThreatDisplayEnabled,
+  threatsEnabled,
+  setThreatsEnabled,
+  showRuler,
+  setShowRuler,
+  footerInfoMode,
+  setFooterInfoMode,
   debugMode,
   setDebugMode,
   showHistoryControls,
@@ -218,59 +393,48 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
   onUndo,
   onRedo,
   onReset,
+  onRematch,
+  onReturnToTitle,
   canUndo,
   canRedo,
+  moveCount,
+  playerClockMs,
   isGuideOpen,
   onGuideToggle,
   onCellClick,
-}) => {
+}: UIOverlayProps) {
   const [cx, cy, cz] = cursor;
   const size = settings.boardSize;
   const currentCell = board[cx]?.[cy]?.[cz];
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWinOverlayVisible, setIsWinOverlayVisible] = useState(false);
+  const [isReturnToTitleConfirmOpen, setIsReturnToTitleConfirmOpen] = useState(false);
   const [panelState, setPanelState] = useState<PanelState>(INITIAL_PANEL_STATE);
-  const settingsRef = useRef<HTMLDivElement | null>(null);
   const isBrightBackdrop = visualTuning.backgroundGray >= 92;
 
   useEffect(() => {
-    if (!winInfo) {
-      setIsWinOverlayVisible(false);
-      return;
-    }
-    setIsWinOverlayVisible(true);
-    const timer = window.setTimeout(() => setIsWinOverlayVisible(false), 4500);
-    return () => window.clearTimeout(timer);
+    setIsWinOverlayVisible(Boolean(winInfo));
   }, [winInfo]);
 
   useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (settingsRef.current && !settingsRef.current.contains(target)) {
-        setIsSettingsOpen(false);
-      }
-    };
+    if (!threatsEnabled) {
+      setPanelState(prev => ({ ...prev, threats: false }));
+    }
+  }, [threatsEnabled]);
 
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
       if (key === 'escape') {
-        setPanelState(prev => {
-          const next = { ...prev };
-          (Object.keys(next) as Array<keyof PanelState>).forEach(panelId => {
-            next[panelId] = false;
-          });
-          return next;
-        });
-        setIsSettingsOpen(false);
+        setIsReturnToTitleConfirmOpen(false);
         return;
       }
 
       if (event.ctrlKey || event.metaKey || event.altKey) return;
 
       const panelByKey: Partial<Record<string, keyof PanelState>> = {
-        m: 'session',
+        m: 'display',
         i: 'inspector',
         c: 'colors',
         l: 'slice',
@@ -286,6 +450,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
       const panelId = panelByKey[key];
       if (!panelId) return;
+      if (panelId === 'threats' && !threatsEnabled) return;
 
       event.preventDefault();
       setPanelState(prev => ({
@@ -294,13 +459,11 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
       }));
     };
 
-    document.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onGuideToggle]);
+  }, [onGuideToggle, threatsEnabled]);
 
   const currentPhaseStyle = useMemo(
     () => getPhaseLegendStyle(currentCell?.phase ?? 0, currentCell?.lastPlayer ?? 'white', visualTuning),
@@ -325,6 +488,25 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
         popup: 'bg-slate-950/98 border-slate-700/90 backdrop-blur-xl shadow-2xl',
       };
 
+  const footerVisible = footerInfoMode === 'always' || (footerInfoMode === 'hover' && hoveredCoord !== null);
+  const displayedCoord = hoveredCoord ?? cursor;
+  const moveHeadline = `現在 ${moveCount}手目`;
+  const playerLabel = activePlayer === 'white' ? '白' : '黒';
+  const cellOwnerLabel = currentCell?.lastPlayer === 'white'
+    ? '白'
+    : currentCell?.lastPlayer === 'black'
+      ? '黒'
+      : 'なし';
+  const sliceLabel = sliceAxis === 'none' ? '全表示' : `${sliceAxis}:${formatSliceIndexLabel(sliceAxis, sliceIndex)}`;
+
+  const togglePanel = (panelId: keyof PanelState) => {
+    if (panelId === 'threats' && !threatsEnabled) return;
+    setPanelState(prev => ({
+      ...prev,
+      [panelId]: !prev[panelId],
+    }));
+  };
+
   const focusOnCell = (coord: Coordinate, axis: 'X' | 'Y' | 'Z') => {
     setSliceAxis(axis);
     if (axis === 'X') setSliceIndex(coord[0]);
@@ -333,61 +515,58 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
     onCursorChange(coord);
   };
 
-  const togglePanel = (panelId: keyof PanelState) => {
-    setPanelState(prev => ({
-      ...prev,
-      [panelId]: !prev[panelId],
-    }));
+  const handleConfirmReturnToTitle = () => {
+    setIsReturnToTitleConfirmOpen(false);
+    onReturnToTitle();
   };
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none text-white">
-      <div className="absolute left-4 top-4 z-40 flex items-center gap-2">
-        <div className={`pointer-events-auto rounded-2xl border px-3 py-2 shadow-2xl backdrop-blur-xl ${theme.panel}`}>
+      <div className="absolute left-4 top-4 z-40 w-[18rem] max-w-[calc(100vw-7rem)]">
+        <div className={`pointer-events-auto rounded-3xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${theme.panel}`}>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-emerald-400">
-            <span>五次元五目並べ</span>
+            <span>現在の対局</span>
             <span className="text-slate-600">/</span>
-            <span className={theme.subtitle}>位相五目</span>
+            <span className={theme.subtitle}>{getModeLabel(gameMode)}</span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <div className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${theme.card}`}>
-              <span
-                className={`inline-block h-3 w-3 rounded-full ${
-                  activePlayer === 'white'
-                    ? 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'
-                    : 'bg-black ring-1 ring-slate-500 shadow-[0_0_10px_rgba(0,0,0,0.7)]'
-                }`}
-              />
-              <div>
-                <div className={`text-[9px] uppercase tracking-[0.16em] ${theme.subtitle}`}>手番</div>
-                <div className={`text-sm font-semibold ${theme.title}`}>{activePlayer === 'white' ? '白' : '黒'}</div>
-              </div>
-            </div>
-            <div className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] ${theme.card}`}>
-              {gameMode === 'local' ? (
-                <>
-                  <User size={12} className="text-sky-400" />
-                  <span>ローカル2P</span>
-                </>
-              ) : (
-                <>
-                  <Cpu size={12} className="text-violet-400" />
-                  <span>{gameMode === 'ai_white' ? '対AI: あなたは黒' : '対AI: あなたは白'}</span>
-                </>
-              )}
-            </div>
+          <div className="mt-2 text-3xl font-black tracking-wide text-white">{moveHeadline}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-300">
+              {playerLabel}の手番
+            </span>
+            {settings.drawMoveLimit > 0 ? (
+              <span className="rounded-full border border-slate-700 bg-slate-950/60 px-2.5 py-1 text-slate-300">
+                引き分け上限 {settings.drawMoveLimit} 手
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <SummaryClock label="白" active={activePlayer === 'white'} value={formatClock(playerClockMs.white)} />
+            <SummaryClock label="黒" active={activePlayer === 'black'} value={formatClock(playerClockMs.black)} />
           </div>
         </div>
       </div>
 
-      <div className={`pointer-events-auto absolute left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-2 py-1.5 shadow-2xl backdrop-blur-xl ${theme.panel}`} ref={settingsRef}>
-        {showHistoryControls ? (
+      <div className="absolute right-4 top-4 z-40">
+        <button
+          type="button"
+          onClick={() => setIsReturnToTitleConfirmOpen(true)}
+          className="pointer-events-auto rounded-2xl border border-slate-700 bg-slate-950/88 px-4 py-3 text-sm font-semibold text-slate-100 shadow-2xl backdrop-blur-xl transition-colors hover:bg-slate-900"
+        >
+          タイトルに戻る
+        </button>
+      </div>
+
+      <div
+        className={`pointer-events-auto absolute left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-2 py-1.5 shadow-2xl backdrop-blur-xl ${theme.panel}`}
+      >
+        {showHistoryControls && settings.undoRedoEnabled ? (
           <>
             <button
               onClick={onUndo}
               disabled={!canUndo}
               className={`rounded-full p-2 transition-all ${canUndo ? 'text-slate-100 hover:bg-slate-800' : 'cursor-not-allowed text-slate-600'}`}
-              title="元に戻す"
+              title="ひとつ戻す"
             >
               <Undo2 size={16} />
             </button>
@@ -409,155 +588,102 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
           <RotateCcw size={16} />
         </button>
         <button
-          onClick={() => setIsSettingsOpen(prev => !prev)}
-          className="rounded-full p-2 text-slate-100 transition-colors hover:bg-slate-800"
-          title="設定"
+          onClick={() => togglePanel('display')}
+          className={`rounded-full p-2 transition-colors hover:bg-slate-800 ${panelState.display ? 'bg-slate-800 text-emerald-300' : 'text-slate-100'}`}
+          title="表示設定 (M)"
         >
           <Settings2 size={16} />
         </button>
         <button
           onClick={onGuideToggle}
           className={`rounded-full p-2 transition-colors hover:bg-slate-800 ${isGuideOpen ? 'text-emerald-300' : 'text-slate-100'}`}
-          title="遊び方と操作ガイド (H)"
+          title="ガイドを開く (H)"
         >
           <HelpCircle size={16} />
         </button>
-
-        {isSettingsOpen ? (
-          <div className={`absolute left-1/2 top-[calc(100%+0.65rem)] z-[85] w-72 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs ${theme.popup}`}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${theme.title}`}>設定</div>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-                title="閉じる"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between gap-3">
-                <span>グリッド補助を表示</span>
-                <input type="checkbox" checked={showGridAssist} onChange={() => setShowGridAssist(prev => !prev)} />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span>警戒判定を行う</span>
-                <input type="checkbox" checked={threatDetectionEnabled} onChange={() => setThreatDetectionEnabled(prev => !prev)} />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span>警戒表示を見せる</span>
-                <input type="checkbox" checked={threatDisplayEnabled} onChange={() => setThreatDisplayEnabled(prev => !prev)} />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span>Undo / Redo を表示</span>
-                <input type="checkbox" checked={showHistoryControls} onChange={() => setShowHistoryControls(prev => !prev)} />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span>デバッグモード</span>
-                <input type="checkbox" checked={debugMode} onChange={() => setDebugMode(prev => !prev)} />
-              </label>
-            </div>
-            <div className={`mt-3 text-[10px] ${theme.subtitle}`}>P を押しながら DEBUG と入力しても切り替えできます。</div>
-          </div>
-        ) : null}
       </div>
 
-      <div className="absolute left-4 top-28 z-40 flex items-start gap-3">
+      <div className="absolute left-4 top-[12.5rem] z-40 flex items-start gap-3">
         <div className="pointer-events-auto flex flex-col gap-2 rounded-[1.4rem] border border-white/10 bg-slate-950/8 p-1.5 backdrop-blur-md">
-          <IconRailButton icon={<Gauge size={17} />} label="対局設定" hotkey="M" active={panelState.session} onClick={() => togglePanel('session')} />
-          <IconRailButton icon={<Eye size={17} />} label="インスペクタ" hotkey="I" active={panelState.inspector} onClick={() => togglePanel('inspector')} />
-          <IconRailButton icon={<Palette size={17} />} label="色見本" hotkey="C" active={panelState.colors} onClick={() => togglePanel('colors')} />
+          <IconRailButton icon={<Gauge size={17} />} label="表示設定" hotkey="M" active={panelState.display} onClick={() => togglePanel('display')} />
+          <IconRailButton icon={<Eye size={17} />} label="セル詳細" hotkey="I" active={panelState.inspector} onClick={() => togglePanel('inspector')} />
+          <IconRailButton icon={<Palette size={17} />} label="位相配色" hotkey="C" active={panelState.colors} onClick={() => togglePanel('colors')} />
         </div>
 
         <div className="flex flex-col gap-3">
-          {panelState.session ? (
+          {panelState.display ? (
             <PanelCard
-              title="対局設定"
-              subtitle="開始前条件と現在ルール"
+              title="表示設定"
+              subtitle="HUD と盤面補助の設定"
               className={`w-[20rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
-              onClose={() => togglePanel('session')}
+              onClose={() => togglePanel('display')}
               headerTrailing={<HotkeyHint keyLabel="M" />}
             >
-              {debugMode ? (
-                <div className="space-y-3">
-                  <div className={`rounded-xl border px-3 py-2 ${theme.card} ${theme.subtitle}`}>
-                    デバッグ中のみ対局設定をリアルタイム変更できます。
-                  </div>
-                  <SessionSettingsForm
-                    settings={settings}
-                    onSettingsChange={nextSettings => setSettings(normalizeGameSettings(nextSettings))}
-                    gameMode={gameMode}
-                    onGameModeChange={setGameMode}
-                    compact
-                  />
+              <div className="space-y-3">
+                <ToggleRow label="グリッド補助を表示" checked={showGridAssist} onChange={() => setShowGridAssist(prev => !prev)} />
+                <ToggleRow label="ルーラーを表示" checked={showRuler} onChange={() => setShowRuler(prev => !prev)} />
+                <ToggleRow label="脅威表示を有効化" checked={threatsEnabled} onChange={() => setThreatsEnabled(prev => !prev)} />
+                <ToggleRow label="Undo / Redo を表示" checked={showHistoryControls} onChange={() => setShowHistoryControls(prev => !prev)} disabled={!settings.undoRedoEnabled} />
+                <ToggleRow label="デバッグ表示" checked={debugMode} onChange={() => setDebugMode(prev => !prev)} />
+                <div className={`rounded-xl border px-3 py-3 ${theme.card}`}>
+                  <div className={`mb-2 text-[11px] font-semibold ${theme.title}`}>フッター表示</div>
+                  <FooterModePicker value={footerInfoMode} onChange={setFooterInfoMode} />
                 </div>
-              ) : (
-                <div className="space-y-2.5">
-                  <div className={`rounded-xl border px-3 py-2 ${theme.card}`}>
-                    <div className={`text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>モード</div>
-                    <div className={`mt-1 font-semibold ${theme.title}`}>
-                      {gameMode === 'local'
-                        ? 'ローカル2P'
-                        : gameMode === 'ai_black'
-                          ? '対AI: あなたは白'
-                          : '対AI: あなたは黒'}
+                {debugMode ? (
+                  <div className="space-y-3">
+                    <div className={`rounded-xl border px-3 py-2 ${theme.card} ${theme.subtitle}`}>
+                      デバッグ表示中のみ、ここから対局設定をその場で変更できます。
                     </div>
+                    <SessionSettingsForm
+                      settings={settings}
+                      onSettingsChange={nextSettings => setSettings(normalizeGameSettings(nextSettings))}
+                      gameMode={gameMode}
+                      onGameModeChange={setGameMode}
+                      compact
+                    />
                   </div>
-                  <div className={`rounded-xl border px-3 py-2 ${theme.card}`}>
-                    <div className={`text-[10px] uppercase tracking-[0.16em] ${theme.subtitle}`}>ルール</div>
-                    <div className={`mt-1 space-y-1 ${theme.title}`}>
-                      <div>{size} x {size} x {size}</div>
-                      <div>位相数 {settings.maxPhases}</div>
-                      <div>XYZ {settings.winLength} 連 / 同位置 {settings.streakWinLength} 連</div>
-                      <div>Undo {settings.undoRedoEnabled ? '有効' : '無効'}</div>
-                      <div>持ち時間 {settings.timeLimitSeconds > 0 ? `${settings.timeLimitSeconds}秒` : '無制限'}</div>
-                      <div>引き分け {settings.drawMoveLimit > 0 ? `${settings.drawMoveLimit}手` : 'なし'}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+                ) : null}
+              </div>
             </PanelCard>
           ) : null}
 
           {panelState.inspector ? (
             <PanelCard
-              title="インスペクタ"
-              subtitle="選択中マスの状態"
+              title="セル詳細"
+              subtitle="現在カーソル位置の情報"
               className={`w-[18.5rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
               onClose={() => togglePanel('inspector')}
               headerTrailing={<HotkeyHint keyLabel="I" />}
             >
               <div className="space-y-2.5">
-                <div className={`flex items-center justify-between rounded-xl border px-3 py-2 font-mono ${theme.card}`}>
-                  <span className={theme.subtitle}>カーソル</span>
-                  <span className="text-emerald-400">({cx}, {cy}, {cz})</span>
+                <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${theme.card}`}>
+                  <span className={theme.subtitle}>座標</span>
+                  <span className="font-semibold tracking-[0.18em] text-emerald-400">{formatDisplayCoordinate(cursor)}</span>
                 </div>
                 <div className={`space-y-2 rounded-xl border p-3 ${theme.card}`}>
                   <div className="flex items-center justify-between">
-                    <span className={theme.subtitle}>最後の手</span>
-                    {currentCell?.lastPlayer ? (
-                      <span className="flex items-center gap-2 font-medium">
-                        <span className={`inline-block h-2.5 w-2.5 rounded-full ${currentCell.lastPlayer === 'white' ? 'bg-white ring-1 ring-slate-400' : 'bg-black ring-1 ring-slate-500'}`} />
-                        <span className={theme.title}>{currentCell.lastPlayer === 'white' ? '白' : '黒'}</span>
-                      </span>
-                    ) : <span className={theme.subtitle}>空</span>}
+                    <span className={theme.subtitle}>最後に置いた色</span>
+                    <span className={theme.title}>{cellOwnerLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={theme.subtitle}>位相</span>
                     <div className="flex items-center gap-2">
-                      <span className="h-3.5 w-3.5 rounded" style={{ backgroundColor: currentPhaseStyle.swatch, border: `1px solid ${currentPhaseStyle.border}` }} />
+                      <span
+                        className="h-3.5 w-3.5 rounded"
+                        style={{ backgroundColor: currentPhaseStyle.swatch, border: `1px solid ${currentPhaseStyle.border}` }}
+                      />
                       <span className={`font-mono ${theme.title}`}>{currentCell?.phase ?? 0}</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div className="rounded-lg border border-slate-800 bg-slate-950/72 px-2 py-2 text-center">
-                      <div className={`text-[10px] ${theme.subtitle}`}>白コンボ</div>
+                      <div className={`text-[10px] ${theme.subtitle}`}>白 streak</div>
                       <div className="text-sm font-semibold text-white">{currentCell?.streak.white ?? 0}</div>
                     </div>
                     <div className="rounded-lg border border-slate-800 bg-slate-950/72 px-2 py-2 text-center">
-                      <div className={`text-[10px] ${theme.subtitle}`}>黒コンボ</div>
+                      <div className={`text-[10px] ${theme.subtitle}`}>黒 streak</div>
                       <div className="text-sm font-semibold text-slate-300">{currentCell?.streak.black ?? 0}</div>
                     </div>
                   </div>
@@ -566,7 +692,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                   onClick={() => onCellClick(cx, cy, cz)}
                   className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2 font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
                 >
-                  ここに置く
+                  このマスに置く
                 </button>
               </div>
             </PanelCard>
@@ -574,7 +700,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
           {panelState.colors ? (
             <PanelCard
-              title="色見本"
+              title="位相配色"
               subtitle="位相ごとの白石 / 黒石"
               className={`w-[16rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
@@ -605,12 +731,12 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
         </div>
       </div>
 
-      <div className="absolute right-4 top-28 z-40 flex items-start gap-3">
+      <div className="absolute right-4 top-32 z-40 flex items-start gap-3">
         <div className="flex flex-col gap-3">
           {panelState.slice ? (
             <PanelCard
-              title="断面表示"
-              subtitle="表示する切り出し面"
+              title="スライス表示"
+              subtitle="見たい断面を切り替える"
               className={`w-[18rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
               onClose={() => togglePanel('slice')}
@@ -624,7 +750,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                       onClick={() => setSliceAxis(axis)}
                       className={`rounded-lg px-2 py-1.5 font-semibold transition-colors ${sliceAxis === axis ? 'bg-sky-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                     >
-                      {axis === 'none' ? '全層' : axis}
+                      {axis === 'none' ? '全表示' : axis}
                     </button>
                   ))}
                 </div>
@@ -632,8 +758,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                 {sliceAxis !== 'none' ? (
                   <div className="space-y-2">
                     <div className={`flex items-center justify-between ${theme.subtle}`}>
-                      <span>{sliceAxis} 位置</span>
-                      <span className={theme.title}>{sliceIndex} / {size - 1}</span>
+                      <span>{sliceAxis} 軸の断面</span>
+                      <span className={theme.title}>
+                        {formatSliceIndexLabel(sliceAxis, sliceIndex)} / {formatSliceIndexLabel(sliceAxis, size - 1)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => setSliceIndex(Math.max(0, sliceIndex - 1))} className="rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800">-</button>
@@ -642,16 +770,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className={`rounded-xl border px-3 py-2 ${theme.card} ${theme.subtitle}`}>全断面を表示中</div>
+                  <div className={`rounded-xl border px-3 py-2 ${theme.card} ${theme.subtitle}`}>全断面を同時表示しています。</div>
                 )}
               </div>
             </PanelCard>
           ) : null}
 
-          {panelState.threats ? (
+          {threatsEnabled && panelState.threats ? (
             <PanelCard
-              title="警戒"
-              subtitle="危険な筋を確認"
+              title="脅威表示"
+              subtitle="現在検出されている危険手"
               className={`w-[18rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
               onClose={() => togglePanel('threats')}
@@ -659,7 +787,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             >
               <div className="space-y-1.5">
                 {threats.length === 0 ? (
-                  <div className={`rounded-xl border px-3 py-3 text-center ${theme.card} ${theme.subtitle}`}>現在は警戒がありません</div>
+                  <div className={`rounded-xl border px-3 py-3 text-center ${theme.card} ${theme.subtitle}`}>現在は脅威が検出されていません。</div>
                 ) : (
                   threats.map((threat, index) => {
                     const targetCell = threat.cells[0];
@@ -679,10 +807,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={12} />
-                          <span className="shrink-0 font-semibold">{isStreak ? '同位置警戒' : '5連警戒'}</span>
-                          <span className="shrink-0 font-mono opacity-80">{targetCell.join(',')}</span>
-                          <span className="min-w-0 truncate opacity-90">{compactThreatText(threat.description)}</span>
+                          <span className="shrink-0 font-semibold">{getThreatLabel(threat)}</span>
+                          <span className="shrink-0 font-semibold tracking-[0.16em] opacity-80">{formatDisplayCoordinate(targetCell)}</span>
                         </div>
+                        <div className="mt-1 text-[10px] opacity-85">{threat.description}</div>
                       </button>
                     );
                   })
@@ -693,8 +821,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
 
           {panelState.controls ? (
             <PanelCard
-              title="操作方法"
-              subtitle="ドラッグ・ホイール・切替"
+              title="操作ガイド"
+              subtitle="キーボードと表示切替"
               className={`w-[20rem] ${theme.panel}`}
               contentClassName="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs"
               onClose={() => togglePanel('controls')}
@@ -713,20 +841,67 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
         </div>
 
         <div className="pointer-events-auto flex flex-col gap-2 rounded-[1.4rem] border border-white/10 bg-slate-950/8 p-1.5 backdrop-blur-md">
-          <IconRailButton icon={<Layers3 size={17} />} label="断面表示" hotkey="L" active={panelState.slice} onClick={() => togglePanel('slice')} />
-          <IconRailButton icon={<ShieldAlert size={17} />} label="警戒" hotkey="V" active={panelState.threats} onClick={() => togglePanel('threats')} />
-          <IconRailButton icon={<BookOpenText size={17} />} label="操作方法" hotkey="O" active={panelState.controls} onClick={() => togglePanel('controls')} />
+          <IconRailButton icon={<Layers3 size={17} />} label="スライス表示" hotkey="L" active={panelState.slice} onClick={() => togglePanel('slice')} />
+          {threatsEnabled ? (
+            <IconRailButton icon={<ShieldAlert size={17} />} label="脅威表示" hotkey="V" active={panelState.threats} onClick={() => togglePanel('threats')} />
+          ) : null}
+          <IconRailButton icon={<BookOpenText size={17} />} label="操作ガイド" hotkey="O" active={panelState.controls} onClick={() => togglePanel('controls')} />
         </div>
       </div>
 
-      {winInfo ? (
+      {winInfo && !isWinOverlayVisible ? (
+        <button
+          type="button"
+          onClick={() => setIsWinOverlayVisible(true)}
+          className="pointer-events-auto absolute right-4 z-40 rounded-full border border-amber-400/35 bg-amber-500/12 px-4 py-2 text-sm font-semibold text-amber-200 shadow-xl backdrop-blur-md"
+          style={{ bottom: footerVisible ? '6.5rem' : '1rem' }}
+        >
+          対局終了
+        </button>
+      ) : null}
+
+      {footerVisible ? (
+        <div className={`pointer-events-auto absolute inset-x-4 bottom-4 z-40 rounded-3xl border px-4 py-3 shadow-2xl backdrop-blur-xl ${theme.panel}`}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+            <span><span className={theme.subtitle}>モード:</span> {getModeLabel(gameMode)}</span>
+            <span><span className={theme.subtitle}>盤面:</span> {size} x {size} x {size}</span>
+            <span><span className={theme.subtitle}>位相:</span> {settings.maxPhases}</span>
+            <span><span className={theme.subtitle}>勝利:</span> XYZ {settings.winLength} 連 / streak {settings.streakWinLength} 連</span>
+            <span><span className={theme.subtitle}>持ち時間:</span> {settings.timeLimitSeconds > 0 ? `${settings.timeLimitSeconds} 秒` : '時間制なし'}</span>
+            <span><span className={theme.subtitle}>引き分け:</span> {settings.drawMoveLimit > 0 ? `${settings.drawMoveLimit} 手` : 'なし'}</span>
+            <span><span className={theme.subtitle}>スライス:</span> {sliceLabel}</span>
+          </div>
+          <div className={`mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs ${theme.title}`}>
+            {hoveredCoord ? (
+              <>
+                <span><span className={theme.subtitle}>ホバー:</span> <span className="font-semibold tracking-[0.16em]">{formatDisplayCoordinate(hoveredCoord)}</span></span>
+                <span><span className={theme.subtitle}>選択:</span> <span className="font-semibold tracking-[0.16em]">{formatDisplayCoordinate(cursor)}</span></span>
+              </>
+            ) : (
+              <span><span className={theme.subtitle}>座標:</span> <span className="font-semibold tracking-[0.16em]">{formatDisplayCoordinate(displayedCoord)}</span></span>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {winInfo && isWinOverlayVisible ? (
         <WinOverlay
           winInfo={winInfo}
-          visible={isWinOverlayVisible}
           onClose={() => setIsWinOverlayVisible(false)}
-          onReset={onReset}
+          onRematch={onRematch}
+          onReturnToTitle={onReturnToTitle}
+        />
+      ) : null}
+
+      {isReturnToTitleConfirmOpen ? (
+        <ConfirmDialog
+          title="タイトルに戻りますか？"
+          body="現在の対局を終了してタイトルに戻りますか？ この操作で盤面と履歴はリセットされます。"
+          confirmLabel="タイトルに戻る"
+          onConfirm={handleConfirmReturnToTitle}
+          onClose={() => setIsReturnToTitleConfirmOpen(false)}
         />
       ) : null}
     </div>
   );
-};
+}

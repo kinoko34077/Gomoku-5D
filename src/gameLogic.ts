@@ -1,6 +1,5 @@
-import type { Board, CellState, Coordinate, Player, WinInfo, GameSettings } from './types';
+import type { Board, CellState, Coordinate, GameSettings, Player, WinInfo } from './types';
 
-// Initialize a 3D board filled with empty cell states
 export function createEmptyBoard(size: number): Board {
   const board: Board = [];
   for (let x = 0; x < size; x++) {
@@ -24,7 +23,6 @@ export function createEmptyBoard(size: number): Board {
   return board;
 }
 
-// Perform a move and return the new board state
 export function makeMove(
   board: Board,
   x: number,
@@ -44,12 +42,13 @@ export function makeMove(
   );
 
   const cell = newBoard[x][y][z];
-  const prev = cell.lastPlayer;
-  const isFirstPlacement = prev === null && cell.streak.white === 0 && cell.streak.black === 0;
+  const previousPlayer = cell.lastPlayer;
+  const isFirstPlacement = previousPlayer === null && cell.streak.white === 0 && cell.streak.black === 0;
+
   cell.phase = isFirstPlacement ? 0 : (cell.phase + 1) % maxPhases;
   cell.lastPlayer = player;
 
-  if (prev === player) {
+  if (previousPlayer === player) {
     cell.streak[player] += 1;
   } else {
     const opponent: Player = player === 'white' ? 'black' : 'white';
@@ -60,7 +59,6 @@ export function makeMove(
   return newBoard;
 }
 
-// Positive search directions (13 unique lines in 3D space)
 export const DIRECTIONS: Coordinate[] = [
   [1, 0, 0],
   [0, 1, 0],
@@ -94,36 +92,34 @@ function isSequentialPhaseLine(phases: number[], maxPhases: number): boolean {
   return isIncreasing || isDecreasing;
 }
 
-// Verify win conditions on the board
-// Precedence: 1. Streak, 2. XYZ line + phase alignment
 export function checkWin(
   board: Board,
   settings: GameSettings,
   activePlayer: Player,
 ): WinInfo | null {
   const size = board.length;
-  const len = settings.winLength;
-  const streakLen = settings.streakWinLength;
+  const lineLength = settings.winLength;
+  const streakLength = settings.streakWinLength;
   const maxPhases = settings.maxPhases;
 
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
         const cell = board[x][y][z];
-        if (cell.streak.white >= streakLen) {
+        if (cell.streak.white >= streakLength) {
           return {
             type: 'streak',
             winner: 'white',
             cells: [[x, y, z]],
-            description: `White Streak Win (streak >= ${streakLen} at (${x}, ${y}, ${z}))`,
+            description: `白が (${x}, ${y}, ${z}) で同位置コンボ ${streakLength} 連を達成しました。`,
           };
         }
-        if (cell.streak.black >= streakLen) {
+        if (cell.streak.black >= streakLength) {
           return {
             type: 'streak',
             winner: 'black',
             cells: [[x, y, z]],
-            description: `Black Streak Win (streak >= ${streakLen} at (${x}, ${y}, ${z}))`,
+            description: `黒が (${x}, ${y}, ${z}) で同位置コンボ ${streakLength} 連を達成しました。`,
           };
         }
       }
@@ -136,15 +132,15 @@ export function checkWin(
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
         for (const [dx, dy, dz] of DIRECTIONS) {
-          const endX = x + (len - 1) * dx;
-          const endY = y + (len - 1) * dy;
-          const endZ = z + (len - 1) * dz;
+          const endX = x + (lineLength - 1) * dx;
+          const endY = y + (lineLength - 1) * dy;
+          const endZ = z + (lineLength - 1) * dz;
           if (isOutOfBounds(endX, endY, endZ, size)) continue;
 
           const lineCoords: Coordinate[] = [];
           const cells: CellState[] = [];
 
-          for (let i = 0; i < len; i++) {
+          for (let i = 0; i < lineLength; i++) {
             const cx = x + i * dx;
             const cy = y + i * dy;
             const cz = z + i * dz;
@@ -166,7 +162,7 @@ export function checkWin(
               type: 'phase_same',
               winner: firstPlayer,
               cells: lineCoords,
-              description: `${firstPlayer.toUpperCase()} XYZ + Same Phase Win (Phase ${firstPhase} x ${len})`,
+              description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${firstPhase} で ${lineLength} 連を作りました。`,
             });
           }
 
@@ -175,7 +171,7 @@ export function checkWin(
               type: 'phase_seq',
               winner: firstPlayer,
               cells: lineCoords,
-              description: `${firstPlayer.toUpperCase()} XYZ + Sequential Phase Win (${phases.join(' -> ')})`,
+              description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${phases.join(' → ')} の階段連を作りました。`,
             });
           }
         }
@@ -184,8 +180,8 @@ export function checkWin(
   }
 
   if (lineWins.length > 0) {
-    const myWin = lineWins.find(win => win.winner === activePlayer);
-    return myWin || lineWins[0];
+    const ownWin = lineWins.find(win => win.winner === activePlayer);
+    return ownWin || lineWins[0];
   }
 
   return null;
@@ -205,7 +201,7 @@ function getNextPhaseForThreatCell(cell: CellState, maxPhases: number): number {
 
 export function detectThreats(board: Board, settings: GameSettings): Threat[] {
   const size = board.length;
-  const len = settings.winLength;
+  const lineLength = settings.winLength;
   const maxPhases = settings.maxPhases;
   const threats: Threat[] = [];
   const seenThreats = new Set<string>();
@@ -219,7 +215,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             type: 'streak_pressure',
             player: 'white',
             cells: [[x, y, z]],
-            description: `白の同位置コンボ警戒: ${cell.streak.white}連 (${x}, ${y}, ${z})`,
+            description: `白が (${x}, ${y}, ${z}) で同位置コンボ ${cell.streak.white} 連です。`,
           });
         }
         if (cell.streak.black >= 3) {
@@ -227,7 +223,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
             type: 'streak_pressure',
             player: 'black',
             cells: [[x, y, z]],
-            description: `黒の同位置コンボ警戒: ${cell.streak.black}連 (${x}, ${y}, ${z})`,
+            description: `黒が (${x}, ${y}, ${z}) で同位置コンボ ${cell.streak.black} 連です。`,
           });
         }
       }
@@ -238,14 +234,14 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
         for (const [dx, dy, dz] of DIRECTIONS) {
-          const endX = x + (len - 1) * dx;
-          const endY = y + (len - 1) * dy;
-          const endZ = z + (len - 1) * dz;
+          const endX = x + (lineLength - 1) * dx;
+          const endY = y + (lineLength - 1) * dy;
+          const endZ = z + (lineLength - 1) * dz;
           if (isOutOfBounds(endX, endY, endZ, size)) continue;
 
           const lineCoords: Coordinate[] = [];
           const cells: CellState[] = [];
-          for (let i = 0; i < len; i++) {
+          for (let i = 0; i < lineLength; i++) {
             const coord: Coordinate = [x + i * dx, y + i * dy, z + i * dz];
             lineCoords.push(coord);
             cells.push(board[coord[0]][coord[1]][coord[2]]);
@@ -253,7 +249,7 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
 
           for (const player of ['white', 'black'] as const) {
             const ownedCount = cells.filter(cell => cell.lastPlayer === player).length;
-            if (ownedCount !== len - 1) continue;
+            if (ownedCount !== lineLength - 1) continue;
 
             const missingIndex = cells.findIndex(cell => cell.lastPlayer !== player);
             if (missingIndex === -1) continue;
@@ -276,8 +272,8 @@ export function detectThreats(board: Board, settings: GameSettings): Threat[] {
               player,
               cells: lineCoords,
               description: allSamePhase
-                ? `${player === 'white' ? '白' : '黒'}が1手で XYZ + 同位相5連`
-                : `${player === 'white' ? '白' : '黒'}が1手で XYZ + 階段位相5連`,
+                ? `${player === 'white' ? '白' : '黒'}が同位相の 4 連を作っています。`
+                : `${player === 'white' ? '白' : '黒'}が位相階段の 4 連を作っています。`,
             });
           }
         }

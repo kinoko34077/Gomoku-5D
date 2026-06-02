@@ -1,11 +1,12 @@
 import { createEmptyBoard } from '../gameLogic';
-import type { Board, Coordinate, GameMode, GameSettings, Player, WinInfo } from '../types';
+import type { Board, Coordinate, GameMode, GameSettings, Player, PlayerClock, WinInfo } from '../types';
 
 export interface HistoryEntry {
   board: Board;
   activePlayer: Player;
   cursor: Coordinate;
   winInfo: WinInfo | null;
+  remainingTime: PlayerClock;
 }
 
 export interface GameStateRef {
@@ -20,6 +21,7 @@ export interface GameStateRef {
   isAiThinking: boolean;
   history: HistoryEntry[];
   historyIndex: number;
+  remainingTime: PlayerClock;
 }
 
 export function clampIndex(value: number, size: number): number {
@@ -43,30 +45,55 @@ export function createHistoryEntry(
   activePlayer: Player,
   cursor: Coordinate,
   winInfo: WinInfo | null,
+  remainingTime: PlayerClock,
 ): HistoryEntry {
   return {
     board,
     activePlayer,
     cursor,
     winInfo,
+    remainingTime,
+  };
+}
+
+export function createInitialRemainingTime(settings: GameSettings): PlayerClock {
+  const initialMs = settings.timeLimitSeconds > 0
+    ? settings.timeLimitSeconds * 1000
+    : null;
+
+  return {
+    white: initialMs,
+    black: initialMs,
   };
 }
 
 export function createInitialHistory(boardSize: number): HistoryEntry[] {
   const board = createEmptyBoard(boardSize);
   const cursor = getCenteredCursor(boardSize);
-  return [createHistoryEntry(board, 'white', cursor, null)];
+  const remainingTime = createInitialRemainingTime({
+    boardSize,
+    maxPhases: 10,
+    winLength: Math.min(5, boardSize),
+    streakWinLength: 5,
+    undoRedoEnabled: true,
+    timeLimitSeconds: 0,
+    drawMoveLimit: 0,
+  });
+  return [createHistoryEntry(board, 'white', cursor, null, remainingTime)];
 }
 
-export function createInitialGameSnapshot(boardSize: number) {
+export function createInitialGameSnapshot(settings: GameSettings) {
+  const boardSize = settings.boardSize;
   const board = createEmptyBoard(boardSize);
   const cursor = getCenteredCursor(boardSize);
   const sliceIndex = Math.floor(boardSize / 2);
+  const remainingTime = createInitialRemainingTime(settings);
   return {
     board,
     cursor,
     sliceIndex,
-    history: [createHistoryEntry(board, 'white', cursor, null)],
+    remainingTime,
+    history: [createHistoryEntry(board, 'white', cursor, null, remainingTime)],
   };
 }
 
@@ -82,4 +109,33 @@ export function getRedoTargetIndex(historyIndex: number, historyLength: number, 
     return historyIndex + 2;
   }
   return historyIndex + 1;
+}
+
+export function cloneRemainingTime(remainingTime: PlayerClock): PlayerClock {
+  return {
+    white: remainingTime.white,
+    black: remainingTime.black,
+  };
+}
+
+export function getDisplayedRemainingTime(
+  remainingTime: PlayerClock,
+  activePlayer: Player,
+  turnStartedAt: number | null,
+  now: number,
+): PlayerClock {
+  if (turnStartedAt === null) {
+    return cloneRemainingTime(remainingTime);
+  }
+
+  const activeClock = remainingTime[activePlayer];
+  if (activeClock === null) {
+    return cloneRemainingTime(remainingTime);
+  }
+
+  const elapsed = Math.max(0, now - turnStartedAt);
+  return {
+    ...remainingTime,
+    [activePlayer]: Math.max(0, activeClock - elapsed),
+  };
 }

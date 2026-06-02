@@ -69,9 +69,9 @@ export function SessionSettingsForm({
             onChange={event => onGameModeChange(event.target.value as GameMode)}
             className={controlClassName}
           >
-            <option value="local">ローカル2P</option>
-            <option value="ai_black">対AI: あなたは白</option>
-            <option value="ai_white">対AI: あなたは黒</option>
+            <option value="local">ローカル 2P</option>
+            <option value="ai_black">対 AI: あなたが白</option>
+            <option value="ai_white">対 AI: あなたが黒</option>
           </select>
         </Field>
       ) : null}
@@ -83,7 +83,7 @@ export function SessionSettingsForm({
         <input
           type="range"
           min="5"
-          max="8"
+          max="15"
           value={settings.boardSize}
           onChange={event => updateNumber('boardSize', Number(event.target.value))}
           className="w-full accent-emerald-500"
@@ -112,7 +112,7 @@ export function SessionSettingsForm({
         />
       </Field>
 
-      <Field label="同位置コンボ" hint={`${settings.streakWinLength} 連`}>
+      <Field label="streak 勝利長" hint={`${settings.streakWinLength} 連`}>
         <input
           type="number"
           min="3"
@@ -123,11 +123,11 @@ export function SessionSettingsForm({
         />
       </Field>
 
-      <Field label="持ち時間" hint="0 で無制限">
+      <Field label="持ち時間" hint="0 で時間制なし">
         <input
           type="number"
           min="0"
-          step="30"
+          step="1"
           value={settings.timeLimitSeconds}
           onChange={event => updateNumber('timeLimitSeconds', Number(event.target.value))}
           className={controlClassName}
@@ -138,16 +138,20 @@ export function SessionSettingsForm({
         <input
           type="number"
           min="0"
-          step="10"
+          step="1"
           value={settings.drawMoveLimit}
           onChange={event => updateNumber('drawMoveLimit', Number(event.target.value))}
           className={controlClassName}
         />
       </Field>
 
-      <Field label="Undo / Redo" hint={settings.undoRedoEnabled ? '有効' : '無効'} className={isHero ? 'md:col-span-2 xl:col-span-1' : ''}>
+      <Field
+        label="Undo / Redo"
+        hint={settings.undoRedoEnabled ? '有効' : '無効'}
+        className={isHero ? 'md:col-span-2 xl:col-span-1' : ''}
+      >
         <label className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/55 px-3 py-2">
-          <span className="text-sm text-slate-200">巻き戻しを許可</span>
+          <span className="text-sm text-slate-200">履歴操作を許可</span>
           <input
             type="checkbox"
             checked={settings.undoRedoEnabled}

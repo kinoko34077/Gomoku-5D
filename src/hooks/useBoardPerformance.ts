@@ -8,7 +8,7 @@ interface ThreatEffectParams {
   settings: GameSettings;
   activePlayer: Player;
   winInfo: WinInfo | null;
-  threatDetectionEnabled: boolean;
+  threatsEnabled: boolean;
   setThreats: (threats: Threat[]) => void;
   setPerformanceState: Dispatch<SetStateAction<PerformanceState>>;
 }
@@ -18,12 +18,12 @@ export function useThreatDetector({
   settings,
   activePlayer,
   winInfo,
-  threatDetectionEnabled,
+  threatsEnabled,
   setThreats,
   setPerformanceState,
 }: ThreatEffectParams) {
   useEffect(() => {
-    if (winInfo || !threatDetectionEnabled) {
+    if (winInfo || !threatsEnabled) {
       setThreats([]);
       setPerformanceState(prev => ({ ...prev, threatCalcMs: 0 }));
       return;
@@ -47,7 +47,7 @@ export function useThreatDetector({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activePlayer, board, settings, setPerformanceState, setThreats, threatDetectionEnabled, winInfo]);
+  }, [activePlayer, board, settings, setPerformanceState, setThreats, threatsEnabled, winInfo]);
 }
 
 export function useFrameLagMonitor(

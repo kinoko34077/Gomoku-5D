@@ -6,7 +6,9 @@ import type { Threat } from '../gameLogic';
 import type { VisualTuning } from '../visualTuning';
 import {
   buildGridPointSets,
+  createGridDots,
   createGridLines,
+  createRulerLabels,
   createSliceBoardPlane,
   createStoneMesh,
   disposeObject3D,
@@ -21,6 +23,7 @@ interface GameBoardProps {
   settings: GameSettings;
   cursor: Coordinate;
   onCursorChange: (cursor: Coordinate) => void;
+  onHoverCoordChange: (coord: Coordinate | null) => void;
   onSliceChange: (axis: 'X' | 'Y' | 'Z', index: number) => void;
   onCellClick: (x: number, y: number, z: number) => void;
   sliceAxis: 'X' | 'Y' | 'Z' | 'none';
@@ -28,6 +31,7 @@ interface GameBoardProps {
   winInfo: WinInfo | null;
   threats: Threat[];
   showGridAssist: boolean;
+  showRuler: boolean;
   visualTuning: VisualTuning;
   showDiagnostics: boolean;
 }
@@ -37,6 +41,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   settings,
   cursor,
   onCursorChange,
+  onHoverCoordChange,
   onSliceChange,
   onCellClick,
   sliceAxis,
@@ -44,6 +49,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   winInfo,
   threats,
   showGridAssist,
+  showRuler,
   visualTuning,
   showDiagnostics,
 }) => {
@@ -61,11 +67,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     board,
     settings,
     cursor,
+    onHoverCoordChange,
     sliceAxis,
     sliceIndex,
     winInfo,
     threats,
     showGridAssist,
+    showRuler,
     visualTuning,
     onCellClick,
     onCursorChange,
@@ -78,17 +86,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       board,
       settings,
       cursor,
+      onHoverCoordChange,
       sliceAxis,
       sliceIndex,
       winInfo,
       threats,
       showGridAssist,
+      showRuler,
       visualTuning,
       onCellClick,
       onCursorChange,
       onSliceChange,
     };
-  }, [board, settings, cursor, sliceAxis, sliceIndex, winInfo, threats, showGridAssist, visualTuning, onCellClick, onCursorChange, onSliceChange]);
+  }, [board, settings, cursor, onHoverCoordChange, sliceAxis, sliceIndex, winInfo, threats, showGridAssist, showRuler, visualTuning, onCellClick, onCursorChange, onSliceChange]);
 
   const cellSpacing = 1.9;
 
@@ -98,6 +108,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const cursorMeshRef = useRef<THREE.Object3D | null>(null);
   const hoveredCellRef = useRef<Coordinate | null>(null);
   const hoverIndicatorRef = useRef<THREE.Mesh | null>(null);
+  const reportedHoverKeyRef = useRef('null');
+  const touchHoverTimerRef = useRef<number | null>(null);
   const winLineRef = useRef<THREE.Line | THREE.Mesh | null>(null);
   const threatPulseRef = useRef<{ mesh: THREE.Mesh; type: string }[]>([]);
   const isCursorDragRef = useRef(false);
@@ -137,13 +149,29 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return () => window.clearInterval(timer);
   }, []);
 
+  const emitHoverCoord = (coord: Coordinate | null) => {
+    const key = coord ? coord.join(',') : 'null';
+    if (reportedHoverKeyRef.current === key) return;
+    reportedHoverKeyRef.current = key;
+    propsRef.current.onHoverCoordChange(coord ? [...coord] as Coordinate : null);
+  };
+
+  const scheduleTouchHoverClear = () => {
+    if (touchHoverTimerRef.current !== null) {
+      window.clearTimeout(touchHoverTimerRef.current);
+    }
+    touchHoverTimerRef.current = window.setTimeout(() => {
+      emitHoverCoord(null);
+      touchHoverTimerRef.current = null;
+    }, 1400);
+  };
+
   const clearBoardVisuals = (scene: THREE.Scene) => {
     Object.values(cellMeshesRef.current).forEach(mesh => {
       scene.remove(mesh);
       disposeObject3D(mesh);
     });
     cellMeshesRef.current = {};
-
     gridLinesRef.current.forEach(line => {
       scene.remove(line);
       disposeObject3D(line);
@@ -281,7 +309,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       const boardSize = propsRef.current.settings.boardSize;
 
-      const { outerPoints: points, slicePoints } = buildGridPointSets(
+      const {
+        outerPoints: points,
+        slicePoints,
+        outerDotPositions,
+        sliceDotPositions,
+        densityMode,
+      } = buildGridPointSets(
         boardSize,
         cellSpacing,
         propsRef.current.sliceAxis,
@@ -306,6 +340,30 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         gridLinesRef.current.push(sliceGridLines);
       }
 
+      if (propsRef.current.showGridAssist && densityMode === 'points') {
+        if (outerDotPositions.length > 0) {
+          const outerDots = createGridDots(
+            outerDotPositions,
+            outerGridColor,
+            Math.min(propsRef.current.visualTuning.outerGridOpacity + 0.06, 0.34),
+            0.14,
+          );
+          scene.add(outerDots);
+          gridLinesRef.current.push(outerDots);
+        }
+
+        if (sliceDotPositions.length > 0) {
+          const sliceDots = createGridDots(
+            sliceDotPositions,
+            sliceGridColor,
+            Math.min(propsRef.current.visualTuning.sliceGridOpacity + 0.18, 0.72),
+            0.2,
+          );
+          scene.add(sliceDots);
+          gridLinesRef.current.push(sliceDots);
+        }
+      }
+
       if (propsRef.current.showGridAssist) {
         const slicePlane = createSliceBoardPlane(
           boardSize,
@@ -320,6 +378,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
 
+      if (propsRef.current.showRuler) {
+        const rulerLabels = createRulerLabels(boardSize, cellSpacing);
+        scene.add(rulerLabels);
+        gridLinesRef.current.push(rulerLabels);
+      }
+
       // Create cell representations (spheres / particles)
 
       for (let x = 0; x < boardSize; x++) {
@@ -330,6 +394,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
             // Determine if this cell is inside the active slice
             const inSlice = isCoordInSlice([x, y, z], propsRef.current.sliceAxis, propsRef.current.sliceIndex);
+            const shouldShowEmptyCell =
+              propsRef.current.showGridAssist &&
+              (densityMode === 'detailed' || propsRef.current.sliceAxis === 'none' || inSlice);
 
             const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
             const emptyOpacity = (inSlice ? 0.32 : propsRef.current.visualTuning.offSliceEmptyOpacity) * visibilityFade;
@@ -337,7 +404,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             let mesh: THREE.Object3D;
 
             if (cell.lastPlayer === null) {
-              if (!propsRef.current.showGridAssist) {
+              if (!shouldShowEmptyCell) {
                 continue;
               }
               // Empty Cell: Render as small dim particle
@@ -472,6 +539,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
     // 9. RAYCASTING INTERACTION
     const raycaster = new THREE.Raycaster();
+    raycaster.params.Points.threshold = 0.65;
     const mouse = new THREE.Vector2();
 
     const pickCoordAtClientPosition = (
@@ -551,6 +619,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       if (coords) {
         hoveredCellRef.current = coords;
+        emitHoverCoord(coords);
         if (isCursorDragRef.current) {
           const [hx, hy, hz] = coords;
           propsRef.current.onCursorChange([hx, hy, hz]);
@@ -562,10 +631,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         renderNow();
       } else {
         hoveredCellRef.current = null;
+        emitHoverCoord(null);
         hoverIndicator.material.opacity = 0;
         document.body.style.cursor = 'default';
         renderNow();
       }
+    };
+
+    const handleMouseLeave = () => {
+      hoveredCellRef.current = null;
+      hoverIndicator.material.opacity = 0;
+      document.body.style.cursor = 'default';
+      emitHoverCoord(null);
+      renderNow();
     };
 
     const handleMouseDown = (event: MouseEvent) => {
@@ -644,6 +722,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     };
 
     const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        const coord = pickCoordAtClientPosition(touch.clientX, touch.clientY);
+        if (coord) {
+          hoveredCellRef.current = coord;
+          hoverIndicator.position.copy(get3DPosition(coord[0], coord[1], coord[2], propsRef.current.settings.boardSize, cellSpacing));
+          hoverIndicator.material.opacity = 0.55;
+          emitHoverCoord(coord);
+          scheduleTouchHoverClear();
+          renderNow();
+        }
+      }
+
       if (event.touches.length !== 2) {
         touchGestureRef.current = null;
         controls.enabled = true;
@@ -701,6 +792,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     const handleTouchEnd = () => {
       touchGestureRef.current = null;
       controls.enabled = true;
+      scheduleTouchHoverClear();
       renderNow();
     };
 
@@ -719,6 +811,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     controls.addEventListener('change', renderNow);
 
     renderer.domElement.addEventListener('mousemove', handleMouseMove);
+    renderer.domElement.addEventListener('mouseleave', handleMouseLeave);
     renderer.domElement.addEventListener('mousedown', handleMouseDown);
     renderer.domElement.addEventListener('contextmenu', handleContextMenu);
     renderer.domElement.addEventListener('wheel', handleMouseWheel, { passive: false });
@@ -810,6 +903,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       controls.removeEventListener('change', renderNow);
       if (renderer.domElement) {
         renderer.domElement.removeEventListener('mousemove', handleMouseMove);
+        renderer.domElement.removeEventListener('mouseleave', handleMouseLeave);
         renderer.domElement.removeEventListener('mousedown', handleMouseDown);
         renderer.domElement.removeEventListener('contextmenu', handleContextMenu);
         renderer.domElement.removeEventListener('wheel', handleMouseWheel);
@@ -819,6 +913,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       }
       cancelAnimationFrame(animationFrameId);
       window.clearInterval(loopWatchdog);
+      if (touchHoverTimerRef.current !== null) {
+        window.clearTimeout(touchHoverTimerRef.current);
+      }
+      emitHoverCoord(null);
       clearBoardVisuals(scene);
       
       // Dispose geometries & materials
@@ -856,7 +954,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       clearBoardVisuals(scene);
 
       // Draw Grid Lines
-      const { outerPoints: points, slicePoints } = buildGridPointSets(
+      const {
+        outerPoints: points,
+        slicePoints,
+        outerDotPositions,
+        sliceDotPositions,
+        densityMode,
+      } = buildGridPointSets(
         boardSize,
         cellSpacing,
         sliceAxis,
@@ -881,12 +985,42 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         gridLinesRef.current.push(sliceGridLines);
       }
 
+      if (showGridAssist && densityMode === 'points') {
+        if (outerDotPositions.length > 0) {
+          const outerDots = createGridDots(
+            outerDotPositions,
+            outerGridColor,
+            Math.min(visualTuning.outerGridOpacity + 0.06, 0.34),
+            0.14,
+          );
+          scene.add(outerDots);
+          gridLinesRef.current.push(outerDots);
+        }
+
+        if (sliceDotPositions.length > 0) {
+          const sliceDots = createGridDots(
+            sliceDotPositions,
+            sliceGridColor,
+            Math.min(visualTuning.sliceGridOpacity + 0.18, 0.72),
+            0.2,
+          );
+          scene.add(sliceDots);
+          gridLinesRef.current.push(sliceDots);
+        }
+      }
+
       if (showGridAssist) {
         const slicePlane = createSliceBoardPlane(boardSize, sliceAxis, sliceIndex, cellSpacing, visualTuning);
         if (slicePlane) {
           scene.add(slicePlane);
           gridLinesRef.current.push(slicePlane);
         }
+      }
+
+      if (showRuler) {
+        const rulerLabels = createRulerLabels(boardSize, cellSpacing);
+        scene.add(rulerLabels);
+        gridLinesRef.current.push(rulerLabels);
       }
 
       // Draw Cells
@@ -904,6 +1038,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
             // Determine if in active slice
             const inSlice = isCoordInSlice([x, y, z], sliceAxis, sliceIndex);
+            const shouldShowEmptyCell =
+              showGridAssist &&
+              (densityMode === 'detailed' || sliceAxis === 'none' || inSlice);
 
             const visibilityFade = getVisibilityFade([x, y, z], pos, inSlice, boardSize);
             const emptyOpacity = (inSlice ? 0.32 : visualTuning.offSliceEmptyOpacity) * visibilityFade;
@@ -911,7 +1048,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             let mesh: THREE.Object3D;
 
             if (cell.lastPlayer === null) {
-              if (!showGridAssist) {
+              if (!shouldShowEmptyCell) {
                 continue;
               }
               const mat = new THREE.MeshBasicMaterial({
@@ -1010,7 +1147,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       renderNowRef.current?.();
     }
-  }, [board, sliceAxis, sliceIndex, winInfo, threats, showGridAssist, visualTuning]);
+  }, [board, sliceAxis, sliceIndex, winInfo, threats, showGridAssist, showRuler, visualTuning]);
 
   return (
     <div className="relative w-full h-full overflow-hidden">

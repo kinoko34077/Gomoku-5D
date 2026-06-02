@@ -23,19 +23,25 @@ export type Board = CellState[][][];
 
 export type Coordinate = [number, number, number];
 
-export type WinType = 'phase_same' | 'phase_seq' | 'streak';
+export type WinType = 'phase_same' | 'phase_seq' | 'streak' | 'draw' | 'timeout';
+
+export interface PlayerClock {
+  white: number | null;
+  black: number | null;
+}
 
 export interface WinInfo {
   type: WinType;
-  winner: Player;
+  winner: Player | null;
   cells: Coordinate[];
   description: string;
 }
 
 export type GameMode = 'local' | 'ai_white' | 'ai_black'; // 'ai_white' means human is black, AI is white; 'ai_black' means human is white, AI is black.
+export type FooterInfoMode = 'always' | 'hover' | 'hidden';
 
 export interface GameSettings {
-  boardSize: number; // 5 to 8 (default 6)
+  boardSize: number; // 5 to 15 (default 6)
   maxPhases: number; // 10
   winLength: number; // 5
   streakWinLength: number; // 5
@@ -49,7 +55,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function normalizeGameSettings(settings: GameSettings): GameSettings {
-  const boardSize = clamp(Math.round(settings.boardSize), 5, 8);
+  const boardSize = clamp(Math.round(settings.boardSize), 5, 15);
   const maxPhases = clamp(Math.round(settings.maxPhases), 2, 10);
   const maxLineLength = Math.min(5, boardSize);
   const winLength = clamp(Math.round(settings.winLength), 3, maxLineLength);
