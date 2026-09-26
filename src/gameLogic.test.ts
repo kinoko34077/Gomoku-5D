@@ -138,6 +138,43 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     expect(win?.winner).toBe('black');
   });
 
+  it('should award a mixed-owner same-phase completion to the active player', () => {
+    const board = createEmptyBoard(settings.boardSize);
+    const owners: Player[] = ['white', 'black', 'white', 'black', 'white'];
+
+    for (let x = 0; x < 5; x++) {
+      board[x][3][1] = {
+        phase: 4,
+        lastPlayer: owners[x],
+        streak: { white: 0, black: 0 },
+      };
+    }
+
+    const win = checkWin(board, settings, 'black');
+    expect(win).not.toBeNull();
+    expect(win?.type).toBe('phase_same');
+    expect(win?.winner).toBe('black');
+  });
+
+  it('should award a mixed-owner cyclic phase sequence to the active player', () => {
+    const board = createEmptyBoard(settings.boardSize);
+    const phases = [8, 9, 0, 1, 2];
+    const owners: Player[] = ['black', 'white', 'black', 'white', 'black'];
+
+    for (let y = 0; y < 5; y++) {
+      board[4][y][2] = {
+        phase: phases[y],
+        lastPlayer: owners[y],
+        streak: { white: 0, black: 0 },
+      };
+    }
+
+    const win = checkWin(board, settings, 'white');
+    expect(win).not.toBeNull();
+    expect(win?.type).toBe('phase_seq');
+    expect(win?.winner).toBe('white');
+  });
+
   it('should prioritize streak over line + phase wins', () => {
     let board = createEmptyBoard(settings.boardSize);
 
