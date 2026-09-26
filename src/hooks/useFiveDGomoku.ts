@@ -45,8 +45,8 @@ export function useFiveDGomoku() {
   const [history, setHistory] = useState<HistoryEntry[]>(() => createInitialGameSnapshot(DEFAULT_GAME_SETTINGS).history);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [remainingTime, setRemainingTime] = useState<PlayerClock>(() => createInitialRemainingTime(DEFAULT_GAME_SETTINGS));
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
-  const turnStartedAtRef = useRef<number | null>(null);
 
   const stateRef = useRef<GameStateRef>({
     board,
@@ -61,6 +61,7 @@ export function useFiveDGomoku() {
     history,
     historyIndex,
     remainingTime,
+    turnStartedAt,
   });
 
   useEffect(() => {
@@ -77,8 +78,9 @@ export function useFiveDGomoku() {
       history,
       historyIndex,
       remainingTime,
+      turnStartedAt,
     };
-  }, [board, settings, activePlayer, cursor, winInfo, sliceAxis, sliceIndex, gameMode, isAiThinking, history, historyIndex, remainingTime]);
+  }, [board, settings, activePlayer, cursor, winInfo, sliceAxis, sliceIndex, gameMode, isAiThinking, history, historyIndex, remainingTime, turnStartedAt]);
 
   const syncCursor = useCallback((nextCursor: Coordinate) => {
     setCursor(nextCursor);
@@ -101,6 +103,8 @@ export function useFiveDGomoku() {
     const initialState = createInitialGameSnapshot(resolvedSettings);
     const freshBoard = initialState.board;
     const initialCursor = initialState.cursor;
+    const now = Date.now();
+    const nextTurnStartedAt = resolvedSettings.timeLimitSeconds > 0 ? now : null;
 
     setBoard(freshBoard);
     setActivePlayer('white');
@@ -113,8 +117,9 @@ export function useFiveDGomoku() {
     setHistory(initialState.history);
     setHistoryIndex(0);
     setRemainingTime(initialState.remainingTime);
-    turnStartedAtRef.current = resolvedSettings.timeLimitSeconds > 0 ? Date.now() : null;
-    setClockNow(Date.now());
+    stateRef.current.turnStartedAt = nextTurnStartedAt;
+    setTurnStartedAt(resolvedSettings.timeLimitSeconds > 0 ? now : null);
+    setClockNow(now);
   }, []);
 
   useEffect(() => {
@@ -123,19 +128,16 @@ export function useFiveDGomoku() {
 
   useEffect(() => {
     if (settings.timeLimitSeconds <= 0 || winInfo) {
-      turnStartedAtRef.current = null;
       return;
     }
 
-    turnStartedAtRef.current = Date.now();
-    setClockNow(Date.now());
-
     const timer = window.setInterval(() => {
+      const now = Date.now();
       const snapshot = getDisplayedRemainingTime(
         stateRef.current.remainingTime,
         stateRef.current.activePlayer,
-        turnStartedAtRef.current,
-        Date.now(),
+        stateRef.current.turnStartedAt,
+        now,
       );
       const activeClock = snapshot[stateRef.current.activePlayer];
 
@@ -148,10 +150,11 @@ export function useFiveDGomoku() {
           cells: [],
           description: `${stateRef.current.activePlayer === 'white' ? '白' : '黒'}の持ち時間がなくなりました。${timeoutWinner === 'white' ? '白' : '黒'}の時間切れ勝ちです。`,
         });
-        turnStartedAtRef.current = null;
+        stateRef.current.turnStartedAt = null;
+        setTurnStartedAt(null);
       }
 
-      setClockNow(Date.now());
+      setClockNow(now);
     }, 250);
 
     return () => window.clearInterval(timer);
@@ -173,7 +176,7 @@ export function useFiveDGomoku() {
     const snapshot = getDisplayedRemainingTime(
       stateRef.current.remainingTime,
       player,
-      turnStartedAtRef.current,
+      stateRef.current.turnStartedAt,
       Date.now(),
     );
     setRemainingTime(snapshot);
@@ -199,6 +202,12 @@ export function useFiveDGomoku() {
         description: `${moveNumber} 手に達したため引き分けです。`,
       };
     }
+
+    const now = Date.now();
+    const moveCompletedAt = settings.timeLimitSeconds > 0 ? now : null;
+    stateRef.current.turnStartedAt = nextWin ? null : moveCompletedAt;
+    setTurnStartedAt(nextWin ? null : moveCompletedAt);
+    setClockNow(now);
 
     setBoard(nextBoard);
     setWinInfo(nextWin);
@@ -250,14 +259,17 @@ export function useFiveDGomoku() {
     const targetIndex = getUndoTargetIndex(currentHistoryIndex, currentMode);
 
     const state = currentHistory[targetIndex];
+    const restoredAt = Date.now();
+    const restoredTurnStartedAt = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? restoredAt : null;
     setBoard(state.board);
     setActivePlayer(state.activePlayer);
     syncCursor(state.cursor);
     setWinInfo(state.winInfo);
     setHistoryIndex(targetIndex);
     setRemainingTime(cloneRemainingTime(state.remainingTime));
-    turnStartedAtRef.current = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? Date.now() : null;
-    setClockNow(Date.now());
+    stateRef.current.turnStartedAt = restoredTurnStartedAt;
+    setTurnStartedAt(currentSettings.timeLimitSeconds > 0 && !state.winInfo ? restoredAt : null);
+    setClockNow(restoredAt);
   }, [syncCursor]);
 
   const handleRedo = useCallback(() => {
@@ -268,14 +280,17 @@ export function useFiveDGomoku() {
     const targetIndex = getRedoTargetIndex(currentHistoryIndex, currentHistory.length, currentMode);
 
     const state = currentHistory[targetIndex];
+    const restoredAt = Date.now();
+    const restoredTurnStartedAt = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? restoredAt : null;
     setBoard(state.board);
     setActivePlayer(state.activePlayer);
     syncCursor(state.cursor);
     setWinInfo(state.winInfo);
     setHistoryIndex(targetIndex);
     setRemainingTime(cloneRemainingTime(state.remainingTime));
-    turnStartedAtRef.current = currentSettings.timeLimitSeconds > 0 && !state.winInfo ? Date.now() : null;
-    setClockNow(Date.now());
+    stateRef.current.turnStartedAt = restoredTurnStartedAt;
+    setTurnStartedAt(currentSettings.timeLimitSeconds > 0 && !state.winInfo ? restoredAt : null);
+    setClockNow(restoredAt);
   }, [syncCursor]);
 
   const handleReset = useCallback(() => {
@@ -374,7 +389,7 @@ export function useFiveDGomoku() {
   const playerClockMs = getDisplayedRemainingTime(
     remainingTime,
     activePlayer,
-    turnStartedAtRef.current,
+    turnStartedAt,
     clockNow,
   );
 
