@@ -6,6 +6,13 @@ const TEST_SETTINGS: GameSettings = {
   ...DEFAULT_GAME_SETTINGS,
 };
 
+function settingsFor(lineWinModel: 'A' | 'B'): GameSettings {
+  return {
+    ...TEST_SETTINGS,
+    lineWinModel,
+  } as GameSettings;
+}
+
 function setCellState(
   board: Board,
   x: number,
@@ -97,7 +104,7 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     expect(win?.cells).toEqual([[2, 2, 2]]);
   });
 
-  it('should not treat plain XYZ ownership as a win', () => {
+  it('Model B should not treat plain XYZ ownership as a win', () => {
     let board = createEmptyBoard(settings.boardSize);
 
     board = setCellState(board, 0, 0, 0, 1, 'white');
@@ -106,24 +113,39 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     board = setCellState(board, 3, 0, 0, 2, 'white');
     board = setCellState(board, 4, 0, 0, 8, 'white');
 
-    expect(checkWin(board, settings, 'white')).toBeNull();
+    expect(checkWin(board, settingsFor('B'), 'white')).toBeNull();
   });
 
-  it('should detect XYZ + Same Phase Win', () => {
+  it('Model A should treat plain same-owner XYZ ownership as a win', () => {
+    let board = createEmptyBoard(settings.boardSize);
+
+    board = setCellState(board, 0, 0, 0, 1, 'white');
+    board = setCellState(board, 1, 0, 0, 3, 'white');
+    board = setCellState(board, 2, 0, 0, 6, 'white');
+    board = setCellState(board, 3, 0, 0, 2, 'white');
+    board = setCellState(board, 4, 0, 0, 8, 'white');
+
+    const win = checkWin(board, settingsFor('A'), 'white');
+    expect(win).not.toBeNull();
+    expect(win?.type).toBe('xyz');
+    expect(win?.winner).toBe('white');
+  });
+
+  it('should detect XYZ + Same Phase Win in Model B', () => {
     let board = createEmptyBoard(settings.boardSize);
 
     for (let x = 0; x < 5; x++) {
       board = setCellState(board, x, 1, 1, 4, 'white');
     }
 
-    const win = checkWin(board, settings, 'white');
+    const win = checkWin(board, settingsFor('B'), 'white');
     expect(win).not.toBeNull();
     expect(win?.type).toBe('phase_same');
     expect(win?.winner).toBe('white');
     expect(win?.cells.length).toBe(5);
   });
 
-  it('should detect XYZ + Sequential Phase Win', () => {
+  it('should detect XYZ + Sequential Phase Win in Model B', () => {
     let board = createEmptyBoard(settings.boardSize);
 
     board = setCellState(board, 1, 0, 1, 8, 'black');
@@ -132,28 +154,70 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     board = setCellState(board, 1, 3, 1, 1, 'black');
     board = setCellState(board, 1, 4, 1, 2, 'black');
 
-    const win = checkWin(board, settings, 'black');
+    const win = checkWin(board, settingsFor('B'), 'black');
     expect(win).not.toBeNull();
     expect(win?.type).toBe('phase_seq');
     expect(win?.winner).toBe('black');
   });
 
-  it('should prioritize streak over line + phase wins', () => {
+  it('Model A should award a mixed-owner same-phase completion to the active player', () => {
     let board = createEmptyBoard(settings.boardSize);
+    const owners: Player[] = ['white', 'black', 'white', 'black', 'white'];
 
-    for (let i = 0; i < 4; i++) {
-      board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
+    for (let x = 0; x < 5; x++) {
+      board = setCellState(board, x, 3, 1, 4, owners[x]);
     }
 
-    board = setCellState(board, 0, 2, 2, 4, 'white');
-    board = setCellState(board, 1, 2, 2, 4, 'white');
-    board = setCellState(board, 3, 2, 2, 4, 'white');
-    board = setCellState(board, 4, 2, 2, 4, 'white');
-
-    board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
-
-    const win = checkWin(board, settings, 'white');
+    const win = checkWin(board, settingsFor('A'), 'black');
     expect(win).not.toBeNull();
-    expect(win?.type).toBe('streak');
+    expect(win?.type).toBe('phase_same');
+    expect(win?.winner).toBe('black');
   });
+
+  it('Model A should award a mixed-owner cyclic phase sequence to the active player', () => {
+    let board = createEmptyBoard(settings.boardSize);
+    const phases = [8, 9, 0, 1, 2];
+    const owners: Player[] = ['black', 'white', 'black', 'white', 'black'];
+
+    for (let y = 0; y < 5; y++) {
+      board = setCellState(board, 1, y, 3, phases[y], owners[y]);
+    }
+
+    const win = checkWin(board, settingsFor('A'), 'white');
+    expect(win).not.toBeNull();
+    expect(win?.type).toBe('phase_seq');
+    expect(win?.winner).toBe('white');
+  });
+
+  it('Model B should reject a mixed-owner phase line', () => {
+    let board = createEmptyBoard(settings.boardSize);
+    const owners: Player[] = ['white', 'black', 'white', 'black', 'white'];
+
+    for (let x = 0; x < 5; x++) {
+      board = setCellState(board, x, 3, 1, 4, owners[x]);
+    }
+
+    expect(checkWin(board, settingsFor('B'), 'black')).toBeNull();
+  });
+
+  for (const lineWinModel of ['A', 'B'] as const) {
+    it(`should prioritize streak over line wins in Model ${lineWinModel}`, () => {
+      let board = createEmptyBoard(settings.boardSize);
+
+      for (let i = 0; i < 4; i++) {
+        board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
+      }
+
+      board = setCellState(board, 0, 2, 2, 4, 'white');
+      board = setCellState(board, 1, 2, 2, 4, 'white');
+      board = setCellState(board, 3, 2, 2, 4, 'white');
+      board = setCellState(board, 4, 2, 2, 4, 'white');
+
+      board = makeMove(board, 2, 2, 2, 'white', settings.maxPhases);
+
+      const win = checkWin(board, settingsFor(lineWinModel), 'white');
+      expect(win).not.toBeNull();
+      expect(win?.type).toBe('streak');
+    });
+  }
 });
