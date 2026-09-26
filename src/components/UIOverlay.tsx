@@ -36,6 +36,7 @@ import {
 } from './gameBoardHelpers';
 import { PanelCard } from './PanelCard';
 import { SessionSettingsForm } from './SessionSettingsForm';
+import { useModalFocus } from '../hooks/useModalFocus';
 
 interface UIOverlayProps {
   board: Board;
@@ -218,12 +219,21 @@ function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
+
   return (
     <div className="pointer-events-auto fixed inset-0 z-[95] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-950/96 p-5 shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="return-title-confirm-title"
+        tabIndex={-1}
+        className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-950/96 p-5 shadow-2xl"
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-white">{title}</h2>
+            <h2 id="return-title-confirm-title" className="text-lg font-bold text-white">{title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">{body}</p>
           </div>
           <button
@@ -279,10 +289,18 @@ function WinOverlay({
       : winInfo.type === 'draw'
         ? '手数上限に到達'
         : 'XYZ + 位相勝利';
+  const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-950/96 p-6 text-center shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="win-overlay-title"
+        tabIndex={-1}
+        className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-950/96 p-6 text-center shadow-2xl"
+      >
         <div className="flex items-start justify-between">
           <div />
           <button
@@ -298,7 +316,7 @@ function WinOverlay({
         <div className="mx-auto mt-1 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 text-3xl font-black text-slate-950">
           {winInfo.type === 'draw' ? '=' : 'W'}
         </div>
-        <h2 className="mt-4 text-2xl font-black tracking-wide text-yellow-300">{title}</h2>
+        <h2 id="win-overlay-title" className="mt-4 text-2xl font-black tracking-wide text-yellow-300">{title}</h2>
         <div className="mt-1 text-[11px] tracking-[0.2em] text-slate-500">{subtitle}</div>
         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/72 p-4 text-sm leading-7 text-slate-200">
           {winInfo.description}

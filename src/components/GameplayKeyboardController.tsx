@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 import type { Coordinate } from '../types';
-import { applyCursorMovement, getGameplayKeyAction } from '../keyboardCommands';
+import {
+  applyCursorMovement,
+  getGameplayKeyAction,
+  shouldIgnoreGameplayShortcutTarget,
+} from '../keyboardCommands';
 
 interface GameplayKeyboardControllerProps {
   enabled: boolean;
@@ -14,11 +18,13 @@ interface GameplayKeyboardControllerProps {
   onRedo: () => void;
 }
 
-function isEditableTarget(target: EventTarget | null) {
+function shouldIgnoreTarget(target: EventTarget | null) {
   const element = target as HTMLElement | null;
   if (!element) return false;
-  const tag = element.tagName?.toLowerCase();
-  return tag === 'input' || tag === 'select' || tag === 'textarea' || element.isContentEditable;
+  return shouldIgnoreGameplayShortcutTarget({
+    tagName: element.tagName,
+    isContentEditable: element.isContentEditable,
+  });
 }
 
 export function GameplayKeyboardController({
@@ -34,7 +40,7 @@ export function GameplayKeyboardController({
 }: GameplayKeyboardControllerProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!enabled || isEditableTarget(event.target)) return;
+      if (!enabled || shouldIgnoreTarget(event.target)) return;
 
       const action = getGameplayKeyAction({
         key: event.key,

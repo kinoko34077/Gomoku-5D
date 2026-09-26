@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCursorMovement,
   getGameplayKeyAction,
+  shouldIgnoreGameplayShortcutTarget,
   type GameplayKeyInput,
 } from './keyboardCommands';
 
@@ -47,5 +48,15 @@ describe('advertised gameplay keyboard commands', () => {
     expect(getGameplayKeyAction(key('x'))).toBeNull();
     expect(getGameplayKeyAction(key('a', { ctrlKey: true }))).toBeNull();
     expect(getGameplayKeyAction(key('q', { altKey: true }))).toBeNull();
+  });
+
+  it('ignores gameplay shortcuts when focus belongs to an interactive control', () => {
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'INPUT', isContentEditable: false })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'TEXTAREA', isContentEditable: false })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'SELECT', isContentEditable: false })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'BUTTON', isContentEditable: false })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'A', isContentEditable: false })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'DIV', isContentEditable: true })).toBe(true);
+    expect(shouldIgnoreGameplayShortcutTarget({ tagName: 'DIV', isContentEditable: false })).toBe(false);
   });
 });
