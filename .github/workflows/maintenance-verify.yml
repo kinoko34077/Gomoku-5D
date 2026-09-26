@@ -20,8 +20,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Hook lint regression
-        run: npx eslint src/hooks/useFiveDGomoku.ts
+        id: hook_lint
+        continue-on-error: true
+        shell: bash
+        run: |
+          npx eslint src/hooks/useFiveDGomoku.ts > hook-lint-output.txt 2>&1
+          status=$?
+          cat hook-lint-output.txt
+          exit $status
+      - name: Upload hook lint diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gomoku-hook-lint-output
+          path: hook-lint-output.txt
       - name: Existing tests
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Enforce hook lint result
+        if: always() && steps.hook_lint.outcome != 'success'
+        run: exit 1
