@@ -25,7 +25,7 @@ export interface PerformanceState {
 }
 
 export function useFiveDGomoku() {
-  const [settings, setSettings] = useState<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
+  const [settings, setSettingsState] = useState<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
   const [gameMode, setGameMode] = useState<GameMode>('local');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [board, setBoard] = useState<Board>(() => createInitialGameSnapshot(DEFAULT_GAME_SETTINGS).board);
@@ -81,6 +81,20 @@ export function useFiveDGomoku() {
       turnStartedAt,
     };
   }, [board, settings, activePlayer, cursor, winInfo, sliceAxis, sliceIndex, gameMode, isAiThinking, history, historyIndex, remainingTime, turnStartedAt]);
+
+  const setSettings = useCallback((nextSettings: GameSettings) => {
+    const previousSettings = stateRef.current.settings;
+    setSettingsState(nextSettings);
+    stateRef.current.settings = nextSettings;
+
+    if (nextSettings.timeLimitSeconds !== previousSettings.timeLimitSeconds) {
+      const now = Date.now();
+      const nextTurnStartedAt = nextSettings.timeLimitSeconds > 0 && !stateRef.current.winInfo ? now : null;
+      stateRef.current.turnStartedAt = nextTurnStartedAt;
+      setTurnStartedAt(nextTurnStartedAt);
+      setClockNow(now);
+    }
+  }, []);
 
   const syncCursor = useCallback((nextCursor: Coordinate) => {
     setCursor(nextCursor);
@@ -298,7 +312,7 @@ export function useFiveDGomoku() {
   }, [resetGameState, settings]);
 
   const applySessionConfig = useCallback((nextSettings: GameSettings, nextGameMode: GameMode) => {
-    setSettings(nextSettings);
+    setSettingsState(nextSettings);
     setGameMode(nextGameMode);
     resetGameState(nextSettings.boardSize, nextSettings);
   }, [resetGameState]);
