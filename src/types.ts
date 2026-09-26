@@ -1,10 +1,12 @@
 export type Player = 'white' | 'black';
+export type LineWinModel = 'A' | 'B';
 
 export const DEFAULT_GAME_SETTINGS = {
   boardSize: 6,
   maxPhases: 10,
   winLength: 5,
   streakWinLength: 5,
+  lineWinModel: 'B',
   undoRedoEnabled: true,
   timeLimitSeconds: 0,
   drawMoveLimit: 0,
@@ -23,7 +25,7 @@ export type Board = CellState[][][];
 
 export type Coordinate = [number, number, number];
 
-export type WinType = 'phase_same' | 'phase_seq' | 'streak' | 'draw' | 'timeout';
+export type WinType = 'xyz' | 'phase_same' | 'phase_seq' | 'streak' | 'draw' | 'timeout';
 
 export interface PlayerClock {
   white: number | null;
@@ -45,6 +47,7 @@ export interface GameSettings {
   maxPhases: number; // 10
   winLength: number; // 5
   streakWinLength: number; // 5
+  lineWinModel: LineWinModel;
   undoRedoEnabled: boolean;
   timeLimitSeconds: number; // 0 = no limit
   drawMoveLimit: number; // 0 = disabled
@@ -60,6 +63,7 @@ export function normalizeGameSettings(settings: GameSettings): GameSettings {
   const maxLineLength = Math.min(5, boardSize);
   const winLength = clamp(Math.round(settings.winLength), 3, maxLineLength);
   const streakWinLength = clamp(Math.round(settings.streakWinLength), 3, 9);
+  const lineWinModel: LineWinModel = settings.lineWinModel === 'A' ? 'A' : 'B';
   const timeLimitSeconds = Math.max(0, Math.round(settings.timeLimitSeconds));
   const drawMoveLimit = Math.max(0, Math.round(settings.drawMoveLimit));
 
@@ -68,6 +72,7 @@ export function normalizeGameSettings(settings: GameSettings): GameSettings {
     maxPhases,
     winLength,
     streakWinLength,
+    lineWinModel,
     undoRedoEnabled: settings.undoRedoEnabled,
     timeLimitSeconds,
     drawMoveLimit,
