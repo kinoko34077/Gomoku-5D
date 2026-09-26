@@ -22,6 +22,7 @@ export interface GameStateRef {
   history: HistoryEntry[];
   historyIndex: number;
   remainingTime: PlayerClock;
+  turnStartedAt: number | null;
 }
 
 export function clampIndex(value: number, size: number): number {
