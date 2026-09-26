@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Reset settings regression
-        run: node --test maintenance-tests/reset-settings.test.mjs
+        run: node --test maintenance-checks/reset-settings.check.mjs
       - name: Existing tests
         run: npm test
       - name: Production build
