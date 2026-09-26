@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DebugVisualPanel } from './components/DebugVisualPanel';
 import { GameBoard } from './components/GameBoard';
 import { GameControlsGuide } from './components/GameControlsGuide';
+import { GameplayKeyboardController } from './components/GameplayKeyboardController';
 import { StartScreen } from './components/StartScreen';
 import { UIOverlay } from './components/UIOverlay';
 import { useDebugModeToggle } from './hooks/useDebugModeToggle';
@@ -110,6 +111,18 @@ export default function App() {
       }}
     >
       <div className="bg-ambient-gradient" />
+
+      <GameplayKeyboardController
+        enabled={hasStartedSession && !isGuideOpen && !winInfo}
+        cursor={cursor}
+        boardSize={settings.boardSize}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onCursorChange={syncCursor}
+        onPlace={executeMove}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+      />
 
       <div className="absolute inset-0 z-10">
         <GameBoard
