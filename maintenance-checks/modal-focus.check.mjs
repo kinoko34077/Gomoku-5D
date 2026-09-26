@@ -15,7 +15,7 @@ test('game guide is an accessible modal using the shared focus boundary', () => 
 test('confirm and win overlays use the same modal focus boundary', () => {
   const source = read('src/components/UIOverlay.tsx');
   const occurrences = source.match(/useModalFocus/g) ?? [];
-  assert.ok(occurrences.length >= 3, 'guide/confirm/win modal surfaces must share focus management');
+  assert.ok(occurrences.length >= 2, 'confirm and win modal surfaces must share focus management');
   assert.ok((source.match(/role="dialog"/g) ?? []).length >= 2, 'confirm and win overlays need dialog roles');
   assert.ok((source.match(/aria-modal="true"/g) ?? []).length >= 2, 'confirm and win overlays need aria-modal');
 });
@@ -23,7 +23,10 @@ test('confirm and win overlays use the same modal focus boundary', () => {
 test('shared modal focus hook traps Tab, supports Escape, and restores previous focus', () => {
   const source = read('src/hooks/useModalFocus.ts');
   assert.match(source, /document\.activeElement/);
-  assert.match(source, /event\.key === 'Tab'/);
+  assert.match(source, /'Tab'/);
+  assert.match(source, /event\.preventDefault\(\)/);
+  assert.match(source, /first\.focus\(\)/);
+  assert.match(source, /last\.focus\(\)/);
   assert.match(source, /event\.key === 'Escape'/);
   assert.match(source, /previousFocus/);
   assert.match(source, /\.focus\(\)/);
