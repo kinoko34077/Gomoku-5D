@@ -51,15 +51,26 @@ describe('advertised gameplay keyboard commands', () => {
     expect(getGameplayKeyAction(key('q', { altKey: true }))).toBeNull();
   });
 
-  it('wires the pure command boundary into UIOverlay and consumes only resolved gameplay commands', () => {
-    const overlayPath = fileURLToPath(new URL('./components/UIOverlay.tsx', import.meta.url));
-    const source = readFileSync(overlayPath, 'utf8');
+  it('routes consumed gameplay commands through one bounded controller and existing App actions', () => {
+    const controllerPath = fileURLToPath(new URL('./components/GameplayKeyboardController.tsx', import.meta.url));
+    const appPath = fileURLToPath(new URL('./App.tsx', import.meta.url));
+    const controller = readFileSync(controllerPath, 'utf8');
+    const app = readFileSync(appPath, 'utf8');
 
-    expect(source).toContain('getGameplayKeyAction');
-    expect(source).toContain('applyCursorMovement');
-    expect(source).toContain('event.preventDefault()');
-    expect(source).toContain('onCellClick(cx, cy, cz)');
-    expect(source).toContain('if (canUndo) onUndo()');
-    expect(source).toContain('if (canRedo) onRedo()');
+    expect(controller).toContain('getGameplayKeyAction');
+    expect(controller).toContain('applyCursorMovement');
+    expect(controller).toContain('isEditableTarget(event.target)');
+    expect(controller).toContain('if (!action) return');
+    expect(controller).toContain('event.preventDefault()');
+    expect(controller).toContain('onPlace(cx, cy, cz)');
+    expect(controller).toContain('if (canUndo) onUndo()');
+    expect(controller).toContain('if (canRedo) onRedo()');
+
+    expect(app).toContain('<GameplayKeyboardController');
+    expect(app).toContain('enabled={hasStartedSession && !isGuideOpen && !winInfo}');
+    expect(app).toContain('onCursorChange={syncCursor}');
+    expect(app).toContain('onPlace={executeMove}');
+    expect(app).toContain('onUndo={handleUndo}');
+    expect(app).toContain('onRedo={handleRedo}');
   });
 });
