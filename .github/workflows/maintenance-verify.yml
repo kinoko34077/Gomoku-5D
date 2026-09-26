@@ -23,6 +23,10 @@ jobs:
         run: node --test maintenance-checks/reset-settings.check.mjs
       - name: Modal focus regression
         run: node --test maintenance-checks/modal-focus.check.mjs
+      - name: Clock state regression
+        run: node --test maintenance-checks/clock-state.check.mjs
+      - name: Targeted clock lint
+        run: npx eslint src/hooks/useFiveDGomoku.ts
       - name: Existing tests
         run: npm test
       - name: Production build
