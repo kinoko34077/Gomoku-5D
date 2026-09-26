@@ -8,6 +8,11 @@ export interface GameplayKeyInput {
   shiftKey: boolean;
 }
 
+export interface GameplayShortcutTarget {
+  tagName?: string;
+  isContentEditable: boolean;
+}
+
 export type CursorMoveAction = {
   kind: 'move';
   dx: number;
@@ -20,6 +25,12 @@ export type GameplayKeyAction =
   | { kind: 'place' }
   | { kind: 'undo' }
   | { kind: 'redo' };
+
+export function shouldIgnoreGameplayShortcutTarget(target: GameplayShortcutTarget): boolean {
+  if (target.isContentEditable) return true;
+  const tag = target.tagName?.toLowerCase();
+  return tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button' || tag === 'a';
+}
 
 export function getGameplayKeyAction(input: GameplayKeyInput): GameplayKeyAction | null {
   const key = input.key.toLowerCase();
