@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Reset settings regression
         run: node --test maintenance-checks/reset-settings.check.mjs
+      - name: Modal focus regression
+        run: node --test maintenance-checks/modal-focus.check.mjs
       - name: Existing tests
         run: npm test
       - name: Production build
