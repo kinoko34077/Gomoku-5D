@@ -11,8 +11,11 @@ test('turn start belongs to render-safe state rather than a render-read ref', ()
 });
 
 test('clock interval effect does not synchronously reset clock render state', () => {
-  const start = source.indexOf('useEffect(() => {', source.indexOf('turnStartedAt'));
-  const end = source.indexOf('useThreatDetector({', start);
+  const condition = 'if (settings.timeLimitSeconds <= 0 || winInfo) {';
+  const conditionIndex = source.indexOf(condition);
+  const start = source.lastIndexOf('useEffect(() => {', conditionIndex);
+  const end = source.indexOf('useThreatDetector({', conditionIndex);
+  assert.notEqual(conditionIndex, -1);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const clockEffect = source.slice(start, end);
