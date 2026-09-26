@@ -101,6 +101,17 @@ export function SessionSettingsForm({
         />
       </Field>
 
+      <Field label="ライン勝利モデル" hint={`Model ${settings.lineWinModel}`}>
+        <select
+          value={settings.lineWinModel}
+          onChange={event => onSettingsChange({ ...settings, lineWinModel: event.target.value as GameSettings['lineWinModel'] })}
+          className={controlClassName}
+        >
+          <option value="A">Model A — XYZ / 共有位相</option>
+          <option value="B">Model B — 所有＋位相</option>
+        </select>
+      </Field>
+
       <Field label="XYZ 勝利長" hint={`${settings.winLength} 連`}>
         <input
           type="number"

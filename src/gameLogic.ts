@@ -92,6 +92,72 @@ function isSequentialPhaseLine(phases: number[], maxPhases: number): boolean {
   return isIncreasing || isDecreasing;
 }
 
+export function evaluateLineWin(
+  cells: CellState[],
+  lineCoords: Coordinate[],
+  settings: GameSettings,
+  activePlayer: Player,
+): WinInfo[] {
+  if (cells.length === 0 || !cells.every(cell => cell.lastPlayer !== null)) return [];
+
+  const firstPlayer = cells[0].lastPlayer;
+  const sameOwner = firstPlayer !== null && cells.every(cell => cell.lastPlayer === firstPlayer);
+  const phases = cells.map(cell => cell.phase);
+  const firstPhase = phases[0];
+  const samePhase = phases.every(phase => phase === firstPhase);
+  const sequentialPhase = isSequentialPhaseLine(phases, settings.maxPhases);
+  const wins: WinInfo[] = [];
+
+  if (settings.lineWinModel === 'B') {
+    if (!sameOwner || firstPlayer === null) return [];
+
+    if (samePhase) {
+      wins.push({
+        type: 'phase_same',
+        winner: firstPlayer,
+        cells: lineCoords,
+        description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${firstPhase} で ${settings.winLength} 連を作りました。`,
+      });
+    }
+    if (sequentialPhase) {
+      wins.push({
+        type: 'phase_seq',
+        winner: firstPlayer,
+        cells: lineCoords,
+        description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${phases.join(' → ')} の階段連を作りました。`,
+      });
+    }
+    return wins;
+  }
+
+  if (samePhase) {
+    wins.push({
+      type: 'phase_same',
+      winner: activePlayer,
+      cells: lineCoords,
+      description: `${activePlayer === 'white' ? '白' : '黒'}が共有位相 ${firstPhase} の ${settings.winLength} 連を完成しました。`,
+    });
+  }
+  if (sequentialPhase) {
+    wins.push({
+      type: 'phase_seq',
+      winner: activePlayer,
+      cells: lineCoords,
+      description: `${activePlayer === 'white' ? '白' : '黒'}が共有位相 ${phases.join(' → ')} の階段連を完成しました。`,
+    });
+  }
+  if (sameOwner) {
+    wins.push({
+      type: 'xyz',
+      winner: activePlayer,
+      cells: lineCoords,
+      description: `${activePlayer === 'white' ? '白' : '黒'}が XYZ ${settings.winLength} 連を完成しました。`,
+    });
+  }
+
+  return wins;
+}
+
 export function checkWin(
   board: Board,
   settings: GameSettings,
@@ -100,7 +166,6 @@ export function checkWin(
   const size = board.length;
   const lineLength = settings.winLength;
   const streakLength = settings.streakWinLength;
-  const maxPhases = settings.maxPhases;
 
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
@@ -136,7 +201,6 @@ export function checkWin(
           const endY = y + (lineLength - 1) * dy;
           const endZ = z + (lineLength - 1) * dz;
           if (isOutOfBounds(endX, endY, endZ, size)) continue;
-
           const lineCoords: Coordinate[] = [];
           const cells: CellState[] = [];
 
@@ -148,32 +212,7 @@ export function checkWin(
             cells.push(board[cx][cy][cz]);
           }
 
-          if (!cells.every(cell => cell.lastPlayer !== null)) continue;
-
-          const firstPlayer = cells[0].lastPlayer;
-          const sameOwner = firstPlayer !== null && cells.every(cell => cell.lastPlayer === firstPlayer);
-          if (!sameOwner || firstPlayer === null) continue;
-
-          const phases = cells.map(cell => cell.phase);
-          const firstPhase = phases[0];
-
-          if (phases.every(phase => phase === firstPhase)) {
-            lineWins.push({
-              type: 'phase_same',
-              winner: firstPlayer,
-              cells: lineCoords,
-              description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${firstPhase} で ${lineLength} 連を作りました。`,
-            });
-          }
-
-          if (isSequentialPhaseLine(phases, maxPhases)) {
-            lineWins.push({
-              type: 'phase_seq',
-              winner: firstPlayer,
-              cells: lineCoords,
-              description: `${firstPlayer === 'white' ? '白' : '黒'}が位相 ${phases.join(' → ')} の階段連を作りました。`,
-            });
-          }
+          lineWins.push(...evaluateLineWin(cells, lineCoords, settings, activePlayer));
         }
       }
     }

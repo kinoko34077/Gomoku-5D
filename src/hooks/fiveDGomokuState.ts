@@ -56,7 +56,7 @@ export function createHistoryEntry(
   };
 }
 
-export function createInitialRemainingTime(settings: GameSettings): PlayerClock {
+export function createInitialRemainingTime(settings: Pick<GameSettings, 'timeLimitSeconds'>): PlayerClock {
   const initialMs = settings.timeLimitSeconds > 0
     ? settings.timeLimitSeconds * 1000
     : null;
@@ -70,15 +70,7 @@ export function createInitialRemainingTime(settings: GameSettings): PlayerClock 
 export function createInitialHistory(boardSize: number): HistoryEntry[] {
   const board = createEmptyBoard(boardSize);
   const cursor = getCenteredCursor(boardSize);
-  const remainingTime = createInitialRemainingTime({
-    boardSize,
-    maxPhases: 10,
-    winLength: Math.min(5, boardSize),
-    streakWinLength: 5,
-    undoRedoEnabled: true,
-    timeLimitSeconds: 0,
-    drawMoveLimit: 0,
-  });
+  const remainingTime = createInitialRemainingTime({ timeLimitSeconds: 0 });
   return [createHistoryEntry(board, 'white', cursor, null, remainingTime)];
 }
 
