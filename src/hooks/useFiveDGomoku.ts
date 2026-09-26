@@ -280,7 +280,7 @@ export function useFiveDGomoku() {
 
   const handleReset = useCallback(() => {
     resetGameState(settings.boardSize, settings);
-  }, [resetGameState, settings.boardSize]);
+  }, [resetGameState, settings]);
 
   const applySessionConfig = useCallback((nextSettings: GameSettings, nextGameMode: GameMode) => {
     setSettings(nextSettings);
