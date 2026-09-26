@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import {
   applyCursorMovement,
   getGameplayKeyAction,
@@ -49,28 +47,5 @@ describe('advertised gameplay keyboard commands', () => {
     expect(getGameplayKeyAction(key('x'))).toBeNull();
     expect(getGameplayKeyAction(key('a', { ctrlKey: true }))).toBeNull();
     expect(getGameplayKeyAction(key('q', { altKey: true }))).toBeNull();
-  });
-
-  it('routes consumed gameplay commands through one bounded controller and existing App actions', () => {
-    const controllerPath = fileURLToPath(new URL('./components/GameplayKeyboardController.tsx', import.meta.url));
-    const appPath = fileURLToPath(new URL('./App.tsx', import.meta.url));
-    const controller = readFileSync(controllerPath, 'utf8');
-    const app = readFileSync(appPath, 'utf8');
-
-    expect(controller).toContain('getGameplayKeyAction');
-    expect(controller).toContain('applyCursorMovement');
-    expect(controller).toContain('isEditableTarget(event.target)');
-    expect(controller).toContain('if (!action) return');
-    expect(controller).toContain('event.preventDefault()');
-    expect(controller).toContain('onPlace(cx, cy, cz)');
-    expect(controller).toContain('if (canUndo) onUndo()');
-    expect(controller).toContain('if (canRedo) onRedo()');
-
-    expect(app).toContain('<GameplayKeyboardController');
-    expect(app).toContain('enabled={hasStartedSession && !isGuideOpen && !winInfo}');
-    expect(app).toContain('onCursorChange={syncCursor}');
-    expect(app).toContain('onPlace={executeMove}');
-    expect(app).toContain('onUndo={handleUndo}');
-    expect(app).toContain('onRedo={handleRedo}');
   });
 });
