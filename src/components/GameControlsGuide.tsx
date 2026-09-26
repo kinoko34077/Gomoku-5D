@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, Hand, Keyboard, MousePointer, Trophy, X } from 'lucide-react';
+import { useModalFocus } from '../hooks/useModalFocus';
 
 interface GameControlsGuideProps {
   isOpen: boolean;
@@ -61,20 +62,34 @@ function GuideSection({
 }
 
 export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, onClose }) => {
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen, onClose);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300">
-      <div className="relative w-[min(92vw,1100px)] rounded-2xl border border-gray-800 bg-slate-900/95 p-6 text-white shadow-2xl backdrop-blur-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="game-controls-guide-title"
+        tabIndex={-1}
+        className="relative w-[min(92vw,1100px)] rounded-2xl border border-gray-800 bg-slate-900/95 p-6 text-white shadow-2xl backdrop-blur-xl"
+      >
         <div className="mb-4 flex items-center justify-between border-b border-gray-800 pb-4">
-          <h2 className="flex items-center gap-2 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-xl font-bold tracking-wide text-transparent">
+          <h2
+            id="game-controls-guide-title"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-xl font-bold tracking-wide text-transparent"
+          >
             <BookOpen size={20} />
             遊び方と操作ガイド
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
             title="閉じる"
+            aria-label="操作ガイドを閉じる"
           >
             <X size={20} />
           </button>
@@ -146,6 +161,7 @@ export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, on
 
         <div className="mt-6 flex justify-end border-t border-gray-800 pt-4">
           <button
+            type="button"
             onClick={onClose}
             className="rounded-xl bg-gradient-to-r from-blue-500 to-emerald-500 px-5 py-2 text-sm font-semibold transition-all hover:from-blue-600 hover:to-emerald-600"
           >
