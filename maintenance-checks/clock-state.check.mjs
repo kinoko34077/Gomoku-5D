@@ -30,3 +30,13 @@ test('clock transitions explicitly start or stop the turn clock at command bound
   assert.match(source, /setTurnStartedAt\(currentSettings\.timeLimitSeconds > 0 && !state\.winInfo \? restoredAt : null\)/);
   assert.match(source, /setTurnStartedAt\(null\)/);
 });
+
+test('live time-limit settings changes keep the previous clock restart/stop boundary explicit', () => {
+  assert.match(source, /const \[settings, setSettingsState\] = useState<GameSettings>/);
+  assert.match(source, /const setSettings = useCallback\(\(nextSettings: GameSettings\) =>/);
+  assert.match(source, /nextSettings\.timeLimitSeconds !== previousSettings\.timeLimitSeconds/);
+  assert.match(source, /nextSettings\.timeLimitSeconds > 0 && !stateRef\.current\.winInfo \? now : null/);
+  assert.match(source, /stateRef\.current\.turnStartedAt = nextTurnStartedAt/);
+  assert.match(source, /setTurnStartedAt\(nextTurnStartedAt\)/);
+  assert.match(source, /setClockNow\(now\)/);
+});
