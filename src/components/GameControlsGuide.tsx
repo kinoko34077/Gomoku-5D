@@ -100,7 +100,7 @@ export const GameControlsGuide: React.FC<GameControlsGuideProps> = ({ isOpen, on
             <GuideSection title="ゲーム概要" icon={<BookOpen size={16} />} accentClass="text-emerald-400">
               <div className="space-y-2 text-sm leading-7 text-slate-200">
                 <p>このゲームは 3D 盤面の各マスに石を重ねて置いていく五目並べです。</p>
-                <p>各マスには位相があり、連続して置くと位相と streak が進みます。</p>
+                <p>各マスの位相は 0 から始まり、最初に置いた石が位相 0、以後同じマスへ置くたび 1 ずつ進んで循環します。</p>
                 <p>スライス表示を切り替えることで、X / Y / Z ごとの断面を見ながら考えられます。</p>
               </div>
             </GuideSection>
