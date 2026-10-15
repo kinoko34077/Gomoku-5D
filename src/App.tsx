@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import {lazy, Suspense, useState} from 'react';
 import { DebugVisualPanel } from './components/DebugVisualPanel';
 import { GameBoard } from './components/GameBoard';
 import { GameControlsGuide } from './components/GameControlsGuide';
@@ -9,6 +9,10 @@ import { useDebugModeToggle } from './hooks/useDebugModeToggle';
 import { useFiveDGomoku } from './hooks/useFiveDGomoku';
 import type { Coordinate, FooterInfoMode, GameMode, GameSettings } from './types';
 import { defaultVisualTuning, type VisualTuning } from './visualTuning';
+
+// M4 plugin gate: no model-editor JS chunk is loaded for normal gameplay.
+const ReactModelPilot = lazy(() => import('./visual-editor-platform/ReactModelPilot'));
+const visualModelPilotEnabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('visual_editor_model') === '1';
 
 function AiThinkingBanner() {
   return (
@@ -199,6 +203,8 @@ export default function App() {
       {debugMode ? <DebugVisualPanel visualTuning={visualTuning} onChange={setVisualTuning} /> : null}
 
       <GameControlsGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
+      {visualModelPilotEnabled ? <Suspense fallback={null}><ReactModelPilot /></Suspense> : null}
 
       {!hasStartedSession ? (
         <StartScreen
