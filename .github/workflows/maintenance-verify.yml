@@ -33,9 +33,9 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
-      - name: Install Chrome test driver
+      - name: Install Playwright Chrome driver outside npm dependency graph
         run: |
-          npm install --no-save --no-package-lock puppeteer-core@24
+          python3 -m pip install --quiet playwright
           command -v google-chrome
       - name: M4 React model integration in real Chrome
-        run: node maintenance-checks/visual-editor-react-browser.check.mjs
+        run: python3 maintenance-checks/visual-editor-react-browser.py
