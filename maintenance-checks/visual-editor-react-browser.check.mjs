@@ -43,7 +43,7 @@ const cardIds=page=>page.$$eval('[data-ve-model-pilot="1"] [data-ve-id]',els=>el
    await page.waitForFunction(()=>Boolean(document.querySelector('[data-ve-id="copy-1"]')));
    assert.deepEqual(errors,[]);
    await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
-   assert.equal(await page.$('[data-ve-model-pilot="1"]'),null,'pilot should still exist on mobile');
+   assert.notEqual(await page.$('[data-ve-model-pilot="1"]'),null,'opt-in pilot remains visible at mobile width');
    await page.goto(host+'/',{waitUntil:'networkidle2'});
    assert.equal(await page.$('[data-ve-model-pilot="1"]'),null);
    console.log('M4 React model browser: opt-in/no-fetch, declarative move, factory clone, delete, undo/redo, 1280/390 success');
