@@ -72,7 +72,7 @@ export default function ReactModelPilot() {
     }catch(e){setStatus(e instanceof Error?e.message:String(e));}
   }
   return <aside aria-label="Reactレイアウト編集試験" data-ve-model-pilot="1"
-    className="pointer-events-auto fixed right-3 top-3 z-[100] w-64 max-w-[85vw] rounded-xl border border-emerald-700/70 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
+    className="pointer-events-auto fixed right-3 top-3 z-[200] w-64 max-w-[85vw] rounded-xl border border-emerald-700/70 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
     <div className="mb-2 text-sm font-semibold">レイアウト編集 · 試験</div>
     <PilotCardList model={snapshot} selected={selected} onSelect={setSelected}/>
     <div className="mt-2 grid grid-cols-2 gap-1">
