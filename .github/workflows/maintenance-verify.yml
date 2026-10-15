@@ -49,4 +49,7 @@ jobs:
         run: |
           npm run build
           grep -q '/Gomoku-5D/assets/' dist/index.html
+          grep -q '/Gomoku-5D/favicon.svg' dist/index.html
+          test -s dist/favicon.svg
+          if grep -q '/vite.svg' dist/index.html; then echo "::error::legacy vite favicon reference"; exit 1; fi
 
