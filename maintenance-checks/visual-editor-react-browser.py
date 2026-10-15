@@ -20,7 +20,7 @@ def wait_ids(page, expected):
     page.wait_for_function(
         """ids => Array.from(document.querySelectorAll('[data-ve-model-pilot="1"] [data-ve-id]'))
           .map(el => el.getAttribute('data-ve-id')).join(',') === ids""",
-        ",".join(expected), timeout=12000
+        arg=",".join(expected), timeout=12000
     )
 
 def main():
