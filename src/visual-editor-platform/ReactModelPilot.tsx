@@ -1,7 +1,14 @@
 import {useState} from 'react';
 import {ModelLayoutSession} from './model-adapter.mjs';
+import {resolvePageProfile} from './profiles.mjs';
+import {exportModelLayout} from './export.mjs';
 import type {LayoutModel, LayoutOperation, VisualNode} from './model-adapter.mjs';
 
+// Explicit page ownership chooses shared model adapter; no game state is exposed.
+const pilotProfile=resolvePageProfile({
+ target:{appId:'gomoku5d',routeId:'main',templateId:'isolated-demo',sourceRevision:'layout-demo-v1'},
+ ownership:'react-model',requiredOperations:['structure.move','structure.duplicate','structure.remove']
+});
 // M4 pilot: this declarative tree contains only layout test cards, never game cells.
 export const initialPilotModel: LayoutModel = {
   rootId: 'root', revision: 0, nodes: {
@@ -42,7 +49,7 @@ export default function ReactModelPilot() {
   const current=snapshot.nodes[selected];
   const siblings=snapshot.nodes.panel.children;
   const idx=siblings.indexOf(selected);
-  const capability=(name:string)=>Boolean(current?.capabilities.includes(name));
+  const capability=(name:string)=>pilotProfile.operations.includes(name)&&Boolean(current?.capabilities.includes(name));
   async function apply(operations: LayoutOperation[]): Promise<boolean> {
     try {
       await session.transact({expectedRevision:session.model.revision,operations});
@@ -71,7 +78,18 @@ export default function ReactModelPilot() {
       setStatus(direction==='undo'?'レイアウト変更を取り消しました':'レイアウト変更をやり直しました');
     }catch(e){setStatus(e instanceof Error?e.message:String(e));}
   }
-  return <aside aria-label="Reactレイアウト編集試験" data-ve-model-pilot="1"
+  function exportLayout(){
+    try {
+      const proposal=exportModelLayout(session.model,pilotProfile);
+      const blob=new Blob([JSON.stringify(proposal,null,2)],{type:'application/json;charset=utf-8'});
+      const url=URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download='gomoku-layout-proposal.json';
+      document.body.append(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+      setStatus('配置情報のみ書き出しました。ゲーム状態・ソースは未変更です');
+    }catch(e){setStatus('書出し不可: '+(e instanceof Error?e.message:String(e)));}
+  }
+  return <aside data-ve-adapter={pilotProfile.adapter} aria-label="Reactレイアウト編集試験" data-ve-model-pilot="1"
     className="pointer-events-auto fixed right-3 top-3 z-[200] w-64 max-w-[85vw] rounded-xl border border-emerald-700/70 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
     <div className="mb-2 text-sm font-semibold">レイアウト編集 · 試験</div>
     <PilotCardList model={snapshot} selected={selected} onSelect={setSelected}/>
@@ -82,6 +100,7 @@ export default function ReactModelPilot() {
       <button type="button" data-action="remove" disabled={!current||!capability('structure.remove')} onClick={remove}>削除</button>
       <button type="button" data-action="undo" disabled={!session.canUndo} onClick={()=>void history('undo')}>元に戻す</button>
       <button type="button" data-action="redo" disabled={!session.canRedo} onClick={()=>void history('redo')}>やり直し</button>
+      <button type="button" data-action="export-layout" onClick={exportLayout}>配置JSONを書出し</button>
     </div>
     <p role="status" className="mt-2 text-xs text-emerald-200">{status}</p>
     <p className="mt-1 text-[10px] text-slate-400">ゲーム盤面・対局履歴は変更しません。URL指定時のみ表示。</p>

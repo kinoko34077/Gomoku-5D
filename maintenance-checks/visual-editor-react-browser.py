@@ -64,6 +64,14 @@ def main():
                 wait_ids(page,["subtitle","title","footer"])
                 page.locator(SEL+" [data-action='undo']").click()
                 wait_ids(page,["subtitle","copy-1","title","footer"])
+                with page.expect_download() as item:
+                    page.locator(SEL + " [data-action='export-layout']").click()
+                artifact=__import__('json').loads(Path(item.value.path()).read_text(encoding="utf-8"))
+                assert item.value.suggested_filename == "gomoku-layout-proposal.json"
+                assert artifact["status"] == "REVIEW_REQUIRED"
+                assert artifact["ownership"] == "react-model"
+                assert artifact["nodes"]["copy-1"]["parentId"] == "panel"
+                assert "game" not in str(artifact).lower()
                 assert not errors, errors
                 page.set_viewport_size({"width":390,"height":844})
                 assert page.locator(SEL).count()==1

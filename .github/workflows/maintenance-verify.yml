@@ -2,7 +2,7 @@ name: Maintenance Verify
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/visual-editor-react-model-m4-20261015]
   push:
     branches: [main]
   workflow_dispatch:
@@ -31,6 +31,10 @@ jobs:
         run: npx eslint src/hooks/useFiveDGomoku.ts
       - name: Existing tests
         run: npm test
+      - name: Pinned shared editor M5 and model/source safety
+        run: |
+          node src/visual-editor-platform/verify-vendor.mjs
+          node --test maintenance-checks/visual-editor-m5.check.mjs
       - name: Production build
         run: npm run build
       - name: Install Playwright Chrome driver outside npm dependency graph
