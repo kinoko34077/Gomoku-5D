@@ -43,11 +43,12 @@ export default function ReactModelPilot() {
   const siblings=snapshot.nodes.panel.children;
   const idx=siblings.indexOf(selected);
   const capability=(name:string)=>Boolean(current?.capabilities.includes(name));
-  async function apply(operations: LayoutOperation[]) {
+  async function apply(operations: LayoutOperation[]): Promise<boolean> {
     try {
       await session.transact({expectedRevision:session.model.revision,operations});
       setStatus('レイアウトのみ更新しました');
-    } catch(e) {setStatus('操作不可: '+(e instanceof Error?e.message:String(e)));}
+      return true;
+    } catch(e) {setStatus('操作不可: '+(e instanceof Error?e.message:String(e)));return false;}
   }
   function reorder(dir:number) {
     const pos=idx+dir;
@@ -62,7 +63,7 @@ export default function ReactModelPilot() {
   }
   function remove(){
     const next=siblings[idx+1]??siblings[idx-1]??'';
-    void apply([{kind:'remove',nodeId:selected}]).then(()=>setSelected(next));
+    void apply([{kind:'remove',nodeId:selected}]).then(ok=>{if(ok)setSelected(next);});
   }
   async function history(direction:'undo'|'redo'){
     try{
@@ -75,12 +76,12 @@ export default function ReactModelPilot() {
     <div className="mb-2 text-sm font-semibold">レイアウト編集 · 試験</div>
     <PilotCardList model={snapshot} selected={selected} onSelect={setSelected}/>
     <div className="mt-2 grid grid-cols-2 gap-1">
-      <button type="button" disabled={!current||idx===0||!capability('structure.move')} onClick={()=>reorder(-1)}>前へ</button>
-      <button type="button" disabled={!current||idx===siblings.length-1||!capability('structure.move')} onClick={()=>reorder(1)}>後へ</button>
-      <button type="button" disabled={!current||!capability('structure.duplicate')} onClick={duplicate}>複製</button>
-      <button type="button" disabled={!current||!capability('structure.remove')} onClick={remove}>削除</button>
-      <button type="button" disabled={!session.canUndo} onClick={()=>void history('undo')}>元に戻す</button>
-      <button type="button" disabled={!session.canRedo} onClick={()=>void history('redo')}>やり直し</button>
+      <button type="button" data-action="up" disabled={!current||idx===0||!capability('structure.move')} onClick={()=>reorder(-1)}>前へ</button>
+      <button type="button" data-action="down" disabled={!current||idx===siblings.length-1||!capability('structure.move')} onClick={()=>reorder(1)}>後へ</button>
+      <button type="button" data-action="duplicate" disabled={!current||!capability('structure.duplicate')} onClick={duplicate}>複製</button>
+      <button type="button" data-action="remove" disabled={!current||!capability('structure.remove')} onClick={remove}>削除</button>
+      <button type="button" data-action="undo" disabled={!session.canUndo} onClick={()=>void history('undo')}>元に戻す</button>
+      <button type="button" data-action="redo" disabled={!session.canRedo} onClick={()=>void history('redo')}>やり直し</button>
     </div>
     <p role="status" className="mt-2 text-xs text-emerald-200">{status}</p>
     <p className="mt-1 text-[10px] text-slate-400">ゲーム盤面・対局履歴は変更しません。URL指定時のみ表示。</p>
