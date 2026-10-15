@@ -2,7 +2,7 @@ name: Maintenance Verify
 
 on:
   pull_request:
-    branches: [main, feat/visual-editor-react-model-m4-20261015]
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -43,3 +43,10 @@ jobs:
           command -v google-chrome
       - name: M4 React model integration in real Chrome
         run: python3 maintenance-checks/visual-editor-react-browser.py
+      - name: Project-subpath production build check
+        env:
+          GOMOKU_PAGES_BASE: '1'
+        run: |
+          npm run build
+          grep -q '/Gomoku-5D/assets/' dist/index.html
+
