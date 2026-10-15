@@ -31,5 +31,22 @@ jobs:
         run: npx eslint src/hooks/useFiveDGomoku.ts
       - name: Existing tests
         run: npm test
+      - name: Pinned shared editor M5 and model/source safety
+        run: |
+          node src/visual-editor-platform/verify-vendor.mjs
+          node --test maintenance-checks/visual-editor-m5.check.mjs
       - name: Production build
         run: npm run build
+      - name: Install Playwright Chrome driver outside npm dependency graph
+        run: |
+          python3 -m pip install --quiet playwright
+          command -v google-chrome
+      - name: M4 React model integration in real Chrome
+        run: python3 maintenance-checks/visual-editor-react-browser.py
+      - name: Project-subpath production build check
+        env:
+          GOMOKU_PAGES_BASE: '1'
+        run: |
+          npm run build
+          grep -q '/Gomoku-5D/assets/' dist/index.html
+

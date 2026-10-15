@@ -1,0 +1,77 @@
+name: Publish 5D Gomoku prototype to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'package*.json'
+      - '.github/workflows/pages-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: gomoku-5d-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies and verify game and editor contracts
+        run: |
+          npm ci
+          npm test
+          node src/visual-editor-platform/verify-vendor.mjs
+          node --test maintenance-checks/visual-editor-m5.check.mjs
+      - name: Build project-subpath Pages artifact
+        env:
+          GOMOKU_PAGES_BASE: '1'
+        run: |
+          npm run build
+          test -s dist/index.html
+          grep -q '/Gomoku-5D/assets/' dist/index.html
+          find dist/assets -maxdepth 1 -type f | grep -q .
+          touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+      - name: Deploy verified prototype
+        uses: actions/deploy-pages@v4
+        id: publish
+      - name: Verify actual public app and bundled JS
+        env:
+          SITE_URL: ${{ steps.publish.outputs.page_url }}
+        run: |
+          set -eu
+          site="${SITE_URL%/}"
+          test -n "$site"
+          for attempt in $(seq 1 18); do
+            if curl --fail --silent --show-error --location --max-time 20 "$site/" -o /tmp/gomoku-index.html &&
+               grep -q '/Gomoku-5D/assets/' /tmp/gomoku-index.html; then
+              src=$(grep -oE '/Gomoku-5D/assets/index-[A-Za-z0-9_-]+\.js' /tmp/gomoku-index.html | head -1)
+              if test -n "$src" && curl --fail --silent --show-error --location --max-time 20 "${site%/Gomoku-5D}$src" -o /tmp/gomoku-app.js && test -s /tmp/gomoku-app.js; then
+                echo "GOMOKU_LIVE_PAGES_VERIFIED=$site/"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::GitHub Pages publication could not be independently verified"
+          exit 1
