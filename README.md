@@ -29,7 +29,7 @@
 - rematch
 - オンライン時の Undo 同意フロー
 
-オンライン対戦の要件は [docs/specs/09_online_multiplayer.md](/C:/Users/kinok/PRG/5次元五目並べ/docs/specs/09_online_multiplayer.md) にあります。
+オンライン対戦の要件は [docs/specs/09_online_multiplayer.md](docs/specs/09_online_multiplayer.md) にあります。
 
 ## 起動
 
