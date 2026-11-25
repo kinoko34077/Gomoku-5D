@@ -219,6 +219,9 @@ export function checkWin(
   }
 
   if (lineWins.length > 0) {
+    if (settings.lineWinModel === 'A') {
+      return lineWins.find(win => win.type === 'phase_same' || win.type === 'phase_seq') ?? lineWins[0];
+    }
     const ownWin = lineWins.find(win => win.winner === activePlayer);
     return ownWin || lineWins[0];
   }
