@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEmptyBoard, makeMove, checkWin } from './gameLogic';
+import { createEmptyBoard, makeMove, checkWin, evaluateLineWin } from './gameLogic';
 import { DEFAULT_GAME_SETTINGS, type Board, type GameSettings, type Player } from './types';
 
 const TEST_SETTINGS: GameSettings = {
@@ -210,6 +210,42 @@ describe('Phase Gomoku 5D Engine Tests', () => {
     }
 
     expect(checkWin(board, settingsFor('B'), 'black')).toBeNull();
+  });
+
+  it('Model A should prioritize a phase line over an earlier-scanned XYZ line', () => {
+    const modelA = settingsFor('A');
+    let board = createEmptyBoard(modelA.boardSize);
+    let turn: Player = 'white';
+    const place = (x: number, y: number, z: number) => {
+      board = makeMove(board, x, y, z, turn, modelA.maxPhases);
+      const placedBy = turn;
+      turn = turn === 'white' ? 'black' : 'white';
+      return placedBy;
+    };
+
+    // An alternating legal sequence makes XYZ phases 1/3/5/7 and a mixed
+    // phase-0 line, both missing their shared intersection (0, 0, 4).
+    expect(place(1, 0, 4)).toBe('white');
+    for (let z = 0; z < 4; z++) {
+      for (let pair = 0; pair <= z; pair++) {
+        expect(place(0, 0, z)).toBe('black');
+        expect(checkWin(board, modelA, 'black')).toBeNull();
+        expect(place(0, 0, z)).toBe('white');
+        expect(checkWin(board, modelA, 'white')).toBeNull();
+      }
+    }
+    expect(place(2, 0, 4)).toBe('black');
+    expect(place(3, 0, 4)).toBe('white');
+    expect(place(4, 0, 4)).toBe('black');
+    expect(checkWin(board, modelA, 'black')).toBeNull();
+    expect(place(0, 0, 4)).toBe('white');
+
+    const xyz: [number, number, number][] = Array.from({ length: 5 }, (_, z) => [0, 0, z]);
+    const phase: [number, number, number][] = Array.from({ length: 5 }, (_, x) => [x, 0, 4]);
+    expect(evaluateLineWin(xyz.map(([x, y, z]) => board[x][y][z]), xyz, modelA, 'white').map(win => win.type)).toEqual(['xyz']);
+    expect(evaluateLineWin(phase.map(([x, y, z]) => board[x][y][z]), phase, modelA, 'white').map(win => win.type)).toEqual(['phase_same']);
+    expect(checkWin(board, modelA, 'white')).toMatchObject({ type: 'phase_same', winner: 'white', cells: phase });
+    expect(checkWin(board, settingsFor('B'), 'white')).toBeNull();
   });
 
   for (const lineWinModel of ['A', 'B'] as const) {
